@@ -269,7 +269,12 @@
   .grow { flex: 1; }
   .detail-hero, .stream-hero { position: relative; overflow: hidden; border-radius: var(--r-card); background: var(--ctp-surface0);
     aspect-ratio: 4 / 3; max-height: 46dvh; }
-  .stream-hero { aspect-ratio: 16 / 7; }
+  /* The stream picker's card and the playing card are one card: same shape and shadow, and the same
+     view-transition name, so starting playback moves it from one screen to the other. */
+  .stream-hero { aspect-ratio: 16 / 9; box-shadow: var(--card-shadow); view-transition-name: now-card; }
+  #player .hero { view-transition-name: now-card; }
+  ::view-transition-group(now-card) { animation-duration: 0.45s; animation-timing-function: var(--ease); }
+  ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 0.3s; }
   .detail-hero > img, .stream-hero > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
   .detail-hero .shade, .stream-hero .shade { position: absolute; inset: 0;
     background: linear-gradient(to top, color-mix(in srgb, var(--ctp-crust) 92%, transparent) 8%, transparent 70%); }
@@ -347,23 +352,35 @@
   .latte body:has(#player:not([hidden])) .backdrop.on { opacity: 0.3; }
 
   /* A natural shadow: a soft contact shadow close in, and a faint wide one, so it lifts without darkening the text below. */
+  /* It reaches about 16px, within the gap to whatever is below the card. */
+  :root { --card-shadow: 0 1px 2px color-mix(in srgb, var(--ctp-crust) 25%, transparent),
+      0 4px 10px -3px color-mix(in srgb, var(--ctp-crust) 40%, transparent),
+      0 10px 18px -10px color-mix(in srgb, var(--ctp-crust) 45%, transparent); }
   .hero { position: relative; width: 100%; aspect-ratio: 16 / 9; overflow: hidden; border-radius: var(--r-card);
-    background: var(--ctp-surface0);
-    box-shadow: 0 1px 2px color-mix(in srgb, var(--ctp-crust) 25%, transparent),
-      0 6px 16px -6px color-mix(in srgb, var(--ctp-crust) 45%, transparent),
-      0 18px 36px -18px color-mix(in srgb, var(--ctp-crust) 40%, transparent); }
+    background: var(--ctp-surface0); box-shadow: var(--card-shadow); }
   .hero > img#art { width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0; transition: opacity 0.5s var(--ease); }
   .hero > img#art.on { opacity: 1; }
   .hero .shade { position: absolute; inset: 0;
     background: linear-gradient(to top, color-mix(in srgb, var(--ctp-crust) 85%, transparent), transparent 60%); }
-  .hero .logo { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); max-width: 70%; max-height: 38%;
+  .hero .logo { position: absolute; left: 16px; bottom: 16px; max-width: 75%; max-height: min(56px, 38%); object-position: left bottom;
     object-fit: contain; filter: drop-shadow(0 2px 8px color-mix(in srgb, var(--ctp-crust) 80%, transparent)); }
-  .hero-title { position: absolute; left: 16px; right: 16px; bottom: 12px; margin: 0; text-align: center; color: var(--ctp-text); }
+  .hero-title { position: absolute; left: 16px; right: 16px; bottom: 16px; margin: 0; color: var(--ctp-text); }
   .meta { width: 100%; display: flex; flex-direction: column; gap: 4px; }
   .ep-info { color: var(--accent); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
   .synopsis { text-align: left; color: var(--ctp-subtext1); display: -webkit-box; -webkit-box-orient: vertical;
     -webkit-line-clamp: 3; overflow: hidden; }
   .synopsis.open { -webkit-line-clamp: unset; }
+  /* ⓘ on the playing card, and the episode info it lays over the card on a dark background. */
+  .hero-info-toggle { position: absolute; top: 10px; right: 10px; z-index: 2; width: 36px; height: 36px; border-radius: 9999px;
+    display: grid; place-items: center; color: var(--ctp-text);
+    background: color-mix(in srgb, var(--ctp-crust) 55%, transparent); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+  .hero-info-toggle .line { width: 20px; height: 20px; }
+  .hero-info-toggle[aria-expanded="true"] { background: var(--glass-accent); }
+  .hero-info { position: absolute; inset: 0; z-index: 1; padding: 16px 56px 16px 16px; overflow-y: auto; justify-content: center;
+    background: color-mix(in srgb, var(--ctp-crust) 84%, transparent); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+    animation: hero-info-in 0.2s var(--ease); }
+  .hero-info .synopsis { display: block; -webkit-line-clamp: unset; color: var(--ctp-subtext1); }
+  @keyframes hero-info-in { from { opacity: 0; } }
 
   .controls { width: 100%; display: flex; flex-direction: column; gap: 14px; padding: 16px; border-radius: var(--r-card); }
   .seek { display: grid; grid-template-columns: minmax(0, 1fr); }
@@ -390,11 +407,11 @@
   .tool:disabled { opacity: 0.45; }
   .tool .ic { width: 22px; height: 22px; }
   .media, .deck { width: 100%; display: flex; flex-direction: column; gap: 20px; min-width: 0; }
-  /* It scrolls, which also clips sideways: room at the sides (and below) so the card's shadow isn't cut off. */
-  .media { min-height: 0; max-height: 100%; overflow-y: auto; gap: 14px;
-    width: auto; margin-inline: -16px; padding: 4px 16px 12px; }
+  /* Nothing in it scrolls (the episode info is on the card), so nothing clips the card's shadow. */
+  .media { min-height: 0; gap: 14px; }
   .deck { flex-shrink: 0; }
-  .hero { max-height: 36dvh; }
+  /* Both cards share their height at every screen size, so the card keeps its size between the two screens. */
+  .hero, .stream-hero { max-height: 36dvh; }
 
   /* ─── Responsive ─── */
   /* Small phones (iPhone SE, mini): tighter transport, the tools on two rows so the labels fit. */
@@ -413,7 +430,7 @@
     .synopsis { -webkit-line-clamp: 2; }
     #player, .deck { gap: 12px; }
     .media { gap: 8px; }
-    .hero { max-height: 28dvh; }
+    .hero, .stream-hero { max-height: 28dvh; }
     .controls { gap: 8px; padding: 12px; }
     .play { width: 60px; height: 60px; }
     .play .ic { width: 26px; height: 26px; }
@@ -421,7 +438,7 @@
   }
   @media (max-height: 600px) and (orientation: portrait) {
     .synopsis { -webkit-line-clamp: 1; }
-    .hero { max-height: 24dvh; }
+    .hero, .stream-hero { max-height: 24dvh; }
   }
   /* Landscape phones and tablets: artwork on the left, controls on the right. */
   @media (min-width: 640px) and (orientation: landscape), (min-width: 760px) {
@@ -435,7 +452,7 @@
   /* Landscape phones: very little height, so the artwork shrinks and the page header gets out of the way. */
   @media (orientation: landscape) and (max-height: 500px) {
     body { gap: 10px; padding-top: calc(env(safe-area-inset-top) + 8px); }
-    .hero { max-height: 46dvh; }
+    .hero, .stream-hero { max-height: 46dvh; }
     .synopsis { -webkit-line-clamp: 3; }
     .controls { gap: 8px; padding: 12px; }
     .play { width: 56px; height: 56px; }
@@ -692,18 +709,22 @@
 <div class="backdrop" id="backdrop"></div>
 
 <main id="player" hidden>
-  <!-- What's playing: the artwork and logo the player shows, then the episode and its synopsis. -->
+  <!-- What's playing: the artwork and logo the player shows; ⓘ lays the episode and its synopsis over it, so the
+       card never moves when they arrive. -->
   <section class="media">
   <div class="hero">
     <img id="art" alt="">
     <div class="shade"></div>
     <img class="logo" id="logo" alt="">
     <h2 class="t-title2 hero-title" id="hero-title"></h2>
-  </div>
-  <div class="meta">
-    <div class="t-foot ep-info" id="ep-info"></div>
-    <div class="t-headline" id="ep-title"></div>
-    <button class="synopsis t-sub" id="synopsis" aria-label="Show the full synopsis"></button>
+    <button class="hero-info-toggle" id="info-toggle" aria-label="Episode info" aria-expanded="false" hidden>
+      <svg class="line" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+    </button>
+    <div class="meta hero-info" id="hero-info" hidden>
+      <div class="t-foot ep-info" id="ep-info"></div>
+      <div class="t-headline" id="ep-title"></div>
+      <div class="synopsis t-sub" id="synopsis"></div>
+    </div>
   </div>
   </section>
 
@@ -817,7 +838,7 @@
       if (msg.k === 'discover') showDiscover(msg);
       if (msg.k === 'shuffle') showShuffle(msg);
       if (msg.k === 'library') showLibrary(msg);
-      if (msg.k === 'route') { pcRoute = msg.route; updateView(); }
+      if (msg.k === 'route') { pcRoute = msg.route; cardTransition(updateView); }
       if (msg.k === 'details') showDetails(msg);
       if (msg.k === 'streams') showStreams(msg);
       if (msg.k === 'cardMenu') showCardMenuActions(msg);
@@ -896,10 +917,35 @@
   let draggingVolume = false;
   let draggingSeek = false;
 
+  // Between the stream picker and the playing screen, either way: one view transition, so the card moves from one
+  // screen to the other. Going in, the playing card starts with the picker's artwork and logo until the PC's arrive.
+  function cardTransition(change) {
+    const playingNow = !$('player').hidden;
+    const playingNext = state.active || pcRoute === 'player';
+    const entering = !playingNow && playingNext && !$('streams').hidden;
+    const leaving = playingNow && !playingNext && pcRoute === 'streams' && !dpadMode;
+    if (!(entering || leaving) || !document.startViewTransition || homeHeroMotion.matches) {
+      change();
+      return;
+    }
+    document.startViewTransition(() => {
+      change();
+      if (leaving) return;
+      const art = $('art');
+      art.src = $('s-bg').src;
+      art.classList.add('on');
+      const logo = $('s-title').querySelector('img');
+      $('logo').hidden = !logo;
+      if (logo) $('logo').src = logo.src;
+      $('hero-title').textContent = $('s-title').textContent;
+      $('hero-title').hidden = Boolean(logo);
+    });
+  }
+
   function showPlayer(msg) {
     const previous = state;
     state = msg;
-    updateView();
+    cardTransition(updateView);
     if (!msg.active) { closeSheetFromPlayer(); $('more').close(); return; }
     showMedia(msg);
     $('play-icon').setAttribute('href', msg.playing ? '#icon-pause' : '#icon-play');
@@ -1666,7 +1712,7 @@
 
   document.querySelectorAll('[data-back]').forEach((button) => button.addEventListener('click', () => {
     if (!$('player').hidden) {
-      backPending(button, $('player'));
+      backPending(button, null); // the card glides back to the stream picker instead of the page sliding away
       player('back');
       return;
     }
@@ -2162,13 +2208,20 @@
     const art = $('art');
     if (art.dataset.src !== msg.artwork) {
       art.dataset.src = msg.artwork;
-      art.classList.remove('on');
-      $('backdrop').classList.remove('on');
       if (msg.artwork) {
-        art.onload = () => { art.classList.add('on'); $('backdrop').classList.add('on'); };
-        art.src = msg.artwork;
+        // The card keeps what it shows until the new artwork has loaded, so it never goes blank.
+        const next = new Image();
+        next.onload = () => {
+          if (art.dataset.src !== msg.artwork) return;
+          art.src = msg.artwork;
+          art.classList.add('on');
+          $('backdrop').classList.add('on');
+        };
+        next.src = msg.artwork;
         $('backdrop').style.setProperty('--art', `url("${encodeURI(msg.artwork)}")`);
       } else {
+        art.classList.remove('on');
+        $('backdrop').classList.remove('on');
         art.removeAttribute('src');
       }
     }
@@ -2187,8 +2240,15 @@
     $('ep-title').hidden = !$('ep-title').textContent;
     $('synopsis').textContent = msg.description;
     $('synopsis').hidden = !msg.description;
+    $('info-toggle').hidden = !(msg.episodeInfo || msg.episodeTitle || msg.description);
+    if ($('info-toggle').hidden) showHeroInfo(false);
   }
-  $('synopsis').addEventListener('click', () => $('synopsis').classList.toggle('open'));
+  function showHeroInfo(open) {
+    $('hero-info').hidden = !open;
+    $('info-toggle').setAttribute('aria-expanded', open);
+  }
+  $('info-toggle').addEventListener('click', () => showHeroInfo($('hero-info').hidden));
+  $('hero-info').addEventListener('click', () => showHeroInfo(false));
   $('seek-back').addEventListener('click', () => player('keyboardSeek10Back'));
   $('seek-forward').addEventListener('click', () => player('keyboardSeek10Forward'));
   $('next-episode').addEventListener('click', () => player('playNextEpisode'));
