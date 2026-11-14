@@ -190,6 +190,8 @@ internal object RemoteHome {
             "catalog" -> CatalogRepository.uiState.value.items.getOrNull(item)
             "folder" -> RemoteFolderPage.posterAt(row, item)
             "discover" -> RemoteSearch.posterAt(item)
+            "library" -> RemoteLibrary.posterAt(row, item)
+            "libraryGrid" -> RemoteLibrary.posterAt(null, item)
             else -> null
         }
     }

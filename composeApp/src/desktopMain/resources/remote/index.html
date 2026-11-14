@@ -201,6 +201,16 @@
   #search-rows:empty { display: none; }
   #search-start section { display: flex; flex-direction: column; gap: 12px; }
   #search-start .row-title { margin: 0; }
+  /* Library: Saved (rows or grids, sorted like the PC) and Cloud (each item's playable files). */
+  #library { gap: 16px; }
+  #library-views { align-self: flex-start; }
+  .library-part { display: flex; flex-direction: column; gap: 16px; }
+  .cloud-item summary { list-style: none; cursor: pointer; display: flex; flex-direction: column; gap: 4px; }
+  .cloud-item summary::-webkit-details-marker { display: none; }
+  .cloud-item .name { font-weight: 600; overflow-wrap: anywhere; }
+  .cloud-files { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+  .cloud-files .btn { justify-content: space-between; height: auto; min-height: 44px; padding-block: 8px; white-space: normal; text-align: left; }
+  .cloud-files .btn span:first-child { overflow-wrap: anywhere; }
   /* Shuffle, like the PC: its filters as one form, actions, progress, and the picked title as a hero. */
   #shuffle { gap: 16px; }
   #shuffle p { margin: 0; }
@@ -519,6 +529,31 @@
   <div class="catalog-status text-sub" id="folder-status"></div>
 </main>
 
+<!-- The saved Library: a row per section, a tap opens the title on the PC. -->
+<main id="library" class="browse grid-page" hidden>
+  <div class="catalog-head">
+    <h2 class="t-title2" id="library-title">Library</h2>
+    <button class="btn btn-icon btn-gray" id="library-layout" aria-label="Layout"><svg class="line"><use href="#i-layout-official"/></svg></button>
+    <button class="btn btn-icon btn-gray" id="library-downloads" aria-label="Downloads">
+      <svg class="line" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg>
+    </button>
+  </div>
+  <div class="seg" id="library-views">
+    <button data-view="saved" aria-pressed="true">Saved</button>
+    <button data-view="cloud" aria-pressed="false">Cloud</button>
+  </div>
+  <div id="library-saved" class="library-part">
+    <div class="discover-pickers">
+      <select class="picker" id="library-list" aria-label="List"></select>
+      <select class="picker" id="library-type" aria-label="Type"></select>
+      <select class="picker" id="library-sort" aria-label="Sort"></select>
+    </div>
+    <div id="library-rows" class="rows"></div>
+  </div>
+  <div id="library-cloud" class="library-part" hidden></div>
+  <div class="catalog-status text-sub" id="library-status"></div>
+</main>
+
 <!-- Shuffle, following the PC: its filters, Shuffle, and the picked title. -->
 <main id="shuffle" class="browse" hidden>
   <div id="shuffle-result" hidden></div>
@@ -778,6 +813,7 @@
       if (msg.k === 'folder') showFolder(msg);
       if (msg.k === 'discover') showDiscover(msg);
       if (msg.k === 'shuffle') showShuffle(msg);
+      if (msg.k === 'library') showLibrary(msg);
       if (msg.k === 'route') { pcRoute = msg.route; updateView(); }
       if (msg.k === 'details') showDetails(msg);
       if (msg.k === 'streams') showStreams(msg);
@@ -953,7 +989,8 @@
     if (homeWasVisible && !homeVisible) homeScroll = scrollY;
     // Pages the phone can't show (Shuffle, Library, Settings, a folder…) are driven with the D-pad.
     const shuffleVisible = onTabs && browseTab === 'shuffle' && Boolean(shuffle?.active);
-    const pcTab = onTabs && browseTab !== 'home' && browseTab !== 'search' && !shuffleVisible;
+    const libraryVisible = onTabs && browseTab === 'library';
+    const pcTab = onTabs && !['home', 'search', 'library'].includes(browseTab) && !shuffleVisible;
     const pcPage = browsing && pcRoute === 'other';
     setHidden('player', !playing);
     setHidden('next-episode-pill', !(state.active && state.nextEpisodePlayable));
@@ -969,6 +1006,9 @@
     }
     if (detailsVisible && detailsWasHidden && !awaitingDetails && details?.name) renderEpisodes();
     setHidden('streams', !(browsing && pcRoute === 'streams'));
+    const libraryOpening = $('library').hidden && libraryVisible;
+    setHidden('library', !libraryVisible);
+    if (libraryOpening) { scrollTo(0, 0); renderLibrary(); }
     const shuffleOpening = $('shuffle').hidden && shuffleVisible;
     setHidden('shuffle', !shuffleVisible);
     if (shuffleOpening) { scrollTo(0, 0); renderShuffle(); }
@@ -1856,6 +1896,107 @@
     select.value = selected ?? '';
     select.disabled = options.length < 2;
   }
+
+  // ─── Library: Saved and Cloud, with the PC's sort, layout and Downloads ───
+  let library = null;
+  let libraryView = 'saved';
+  let libraryList = null; // grid layout: the tracking list shown, and the type filter (kept on the phone, as the PC keeps its own)
+  let libraryType = '';
+
+  function showLibrary(msg) {
+    library = msg;
+    renderLibrary();
+  }
+
+  const fileSize = (bytes) => {
+    if (!bytes) return '';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let i = 0;
+    while (bytes >= 1024 && i < units.length - 1) { bytes /= 1024; i += 1; }
+    return `${bytes.toFixed(bytes >= 10 || i === 0 ? 0 : 1)} ${units[i]}`;
+  };
+
+  function renderLibrary() {
+    if (!library || $('library').hidden) return;
+    const { labels } = library;
+    $('library-title').textContent = library.title;
+    document.querySelectorAll('#library-views [data-view]').forEach((b) => {
+      b.textContent = labels[b.dataset.view];
+      b.setAttribute('aria-pressed', b.dataset.view === libraryView);
+    });
+    // Layout and sort belong to Saved, like the PC.
+    $('library-layout').hidden = libraryView !== 'saved';
+    $('library-layout').querySelector('use').setAttribute('href', library.layout === 'grid' ? '#i-layout-persistent_hero' : '#i-layout-official');
+    $('library-saved').hidden = libraryView !== 'saved';
+    $('library-cloud').hidden = libraryView !== 'cloud';
+    if (libraryView === 'saved') {
+      picker($('library-sort'), library.sorts, library.sort, (value) => send({ cmd: 'librarySort', value }));
+      const gridLayout = library.layout === 'grid';
+      $('library-list').hidden = !gridLayout || !library.tracking;
+      $('library-type').hidden = !gridLayout;
+      if (!gridLayout) {
+        replaceRows($('library-rows'), library.rows.map((row) => rowSection(row.title,
+          row.items.map((item, i) => posterTile(item, row.shape, { from: 'library', row: row.key, item: i })))));
+      } else {
+        // Like the PC's grid: a local Library is one grid of every title; a tracking source shows one list at a time.
+        const list = library.tracking ? library.rows.find((r) => r.key === libraryList) || library.rows[0] : null;
+        if (library.tracking) {
+          libraryList = list?.key ?? null;
+          picker($('library-list'), library.rows.map((r) => ({ key: r.key, label: r.title })), libraryList,
+            (value) => { libraryList = value; renderLibrary(); });
+        }
+        const titles = list || library.grid;
+        const locate = (i) => (list ? { from: 'library', row: list.key, item: i } : { from: 'libraryGrid', item: i });
+        const types = [...new Set(titles?.categories || [])].sort();
+        if (!types.includes(libraryType)) libraryType = '';
+        picker($('library-type'), [{ key: '', label: labels.allTypes }, ...types.map((t) => ({ key: t, label: library.typeLabels[t] || t }))],
+          libraryType, (value) => { libraryType = value; renderLibrary(); });
+        const grid = el('div', `catalog-grid${titles?.shape === 'landscape' ? ' landscape' : ''}`);
+        grid.append(...(titles?.items || []).flatMap((item, i) =>
+          !libraryType || titles.categories[i] === libraryType ? [posterTile(item, titles.shape, locate(i))] : []));
+        $('library-rows').replaceChildren(grid);
+      }
+      pageStatus($('library-status'), { loading: library.loading, error: library.error, count: library.rows.length });
+      return;
+    }
+    const cloud = library.cloud;
+    if (!cloud.connected) {
+      const card = el('div', 'card');
+      card.append(el('div', 'name', labels.connectTitle), el('p', 'note', labels.connectMessage));
+      $('library-cloud').replaceChildren(card);
+      pageStatus($('library-status'), { count: 1 });
+      return;
+    }
+    // Each cloud item opens to its playable files; a file plays on the PC.
+    const open = new Set([...$('library-cloud').querySelectorAll('details[open]')].map((d) => d.dataset.key));
+    $('library-cloud').replaceChildren(...cloud.items.map((item) => {
+      const box = el('details', 'card cloud-item');
+      box.dataset.key = item.key;
+      box.open = open.has(item.key);
+      const summary = el('summary');
+      const progress = item.progress != null && item.progress < 1 ? `${Math.round(item.progress * 100)}%` : '';
+      summary.append(el('span', 'name', item.name),
+        el('span', 'note', [item.provider, fileSize(item.size), item.status, progress].filter(Boolean).join(' · ')));
+      const files = el('div', 'cloud-files');
+      files.append(...item.files.map((file) => {
+        const button = el('button', 'btn btn-gray');
+        button.append(el('span', '', file.name), el('span', 'note', fileSize(file.size)));
+        button.addEventListener('click', () => { markBusy(button); send({ cmd: 'cloudPlay', item: item.key, file: file.key }); });
+        return button;
+      }));
+      box.append(summary, files);
+      return box;
+    }));
+    pageStatus($('library-status'), { loading: cloud.loading, error: cloud.error, count: cloud.items.length });
+  }
+
+  document.querySelectorAll('#library-views [data-view]').forEach((b) => b.addEventListener('click', () => {
+    libraryView = b.dataset.view;
+    if (libraryView === 'cloud') send({ cmd: 'cloudLoad' });
+    renderLibrary();
+  }));
+  $('library-layout').addEventListener('click', () => send({ cmd: 'libraryLayout' }));
+  $('library-downloads').addEventListener('click', () => send({ cmd: 'libraryDownloads' }));
 
   // ─── Shuffle: the PC's own Shuffle, its filters as a form; every change runs on the PC ───
   let shuffle = null;
