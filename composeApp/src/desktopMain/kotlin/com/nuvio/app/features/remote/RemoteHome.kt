@@ -186,6 +186,7 @@ internal object RemoteHome {
             "search" -> SearchRepository.uiState.value.sections.getOrNull(row?.toIntOrNull() ?: -1)?.items?.getOrNull(item)
             "catalog" -> CatalogRepository.uiState.value.items.getOrNull(item)
             "folder" -> RemoteFolderPage.posterAt(row, item)
+            "discover" -> RemoteSearch.posterAt(item)
             else -> null
         }
     }

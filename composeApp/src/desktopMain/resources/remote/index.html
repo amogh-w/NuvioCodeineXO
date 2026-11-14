@@ -183,6 +183,24 @@
   .folder-tabs .btn { flex: none; }
   .row-note { min-height: 64px; display: flex; align-items: center; }
   .tile .year { font-size: 12px; color: var(--ctp-subtext0); margin-top: -4px; }
+  /* Search before you type, like the PC: recent searches, then Discover with its pickers. */
+  .recent-list { display: flex; flex-direction: column; gap: 8px; }
+  .search-box.recent { padding: 0; gap: 0; overflow: hidden; }
+  .recent > button { height: 100%; display: flex; align-items: center; color: var(--ctp-text); font-size: 16px; }
+  .recent > button:first-child { flex: 1; min-width: 0; padding-inline: 16px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .recent > button:last-child { width: 48px; justify-content: center; color: var(--ctp-subtext0); }
+  .discover-pickers { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin-inline: -16px; padding: 2px 16px; }
+  .discover-pickers::-webkit-scrollbar { display: none; }
+  .picker { flex: none; appearance: none; -webkit-appearance: none; height: 36px; max-width: 62vw; padding: 0 32px 0 14px; border-radius: 9999px;
+    font: inherit; font-size: 14px; font-weight: 600; color: var(--ctp-text); text-overflow: ellipsis;
+    border: 1px solid color-mix(in srgb, var(--ctp-text) 16%, transparent); background: color-mix(in srgb, var(--ctp-surface0) 70%, transparent)
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239399b2' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 12px center; }
+  .picker:disabled { opacity: 0.45; }
+  .picker:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  #search-start { display: flex; flex-direction: column; gap: 26px; }
+  #search-rows:empty { display: none; }
+  #search-start section { display: flex; flex-direction: column; gap: 12px; }
+  #search-start .row-title { margin: 0; }
   .catalog-status { display: flex; justify-content: center; align-items: center; gap: 10px; min-height: 64px; }
   @media (min-width: 480px) { .grid-page .catalog-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
   .row-title { margin: 0 0 12px; font-size: 20px; font-weight: 600; }
@@ -207,6 +225,11 @@
   .search-box { display: flex; align-items: center; gap: 10px; height: 48px; padding-inline: 14px; border-radius: var(--r-ctl);
     color: var(--ctp-subtext0); }
   .search-box:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+  /* Clear: only while there is text; the browser's own clear button is hidden so there is one. */
+  .search-clear { flex: none; width: 32px; height: 32px; margin-right: -6px; border-radius: 9999px; color: var(--ctp-subtext0); }
+  .search-clear:active { background-color: var(--glass-active); }
+  .search-box input:placeholder-shown + .search-clear { display: none; }
+  .search-box input::-webkit-search-cancel-button { display: none; }
   .search-box input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent; color: var(--ctp-text); font: inherit; font-size: 17px; }
   @media (min-width: 640px) and (orientation: landscape), (min-width: 760px) {
     .hero-card { flex-basis: 100%; min-height: min(60dvh, 43vw); }
@@ -485,9 +508,28 @@
   <label class="search-box">
     <svg class="line"><use href="#i-search"/></svg>
     <input id="search-input" type="search" enterkeyhint="search" autocomplete="off" placeholder="Search movies & shows" aria-label="Search">
+    <button class="search-clear" id="search-clear" type="button" aria-label="Clear search">✕</button>
   </label>
   <div id="search-rows" class="rows"></div>
   <div class="card t-sub text-sub" id="search-empty" hidden></div>
+  <!-- Before you type, like the PC: recent searches, then Discover. -->
+  <div id="search-start">
+    <section id="recent-section" hidden>
+      <h3 class="row-title">Recent searches</h3>
+      <div class="recent-list" id="recent-list"></div>
+    </section>
+    <section class="grid-page">
+      <h3 class="row-title">Discover</h3>
+      <div class="discover-pickers">
+        <select class="picker" id="pick-type" aria-label="Type"></select>
+        <select class="picker" id="pick-catalog" aria-label="Catalog"></select>
+        <select class="picker" id="pick-genre" aria-label="Genre"></select>
+      </div>
+      <div class="text-sub" id="discover-source"></div>
+      <div class="catalog-grid" id="discover-grid"></div>
+      <div class="catalog-status text-sub" id="discover-status"></div>
+    </section>
+  </div>
 </main>
 
 <!-- A title's page, following the PC: tap Play, an episode, watched or library, as on the PC. -->
@@ -704,6 +746,7 @@
       if (msg.k === 'search') showSearch(msg);
       if (msg.k === 'catalog') showCatalog(msg);
       if (msg.k === 'folder') showFolder(msg);
+      if (msg.k === 'discover') showDiscover(msg);
       if (msg.k === 'route') { pcRoute = msg.route; updateView(); }
       if (msg.k === 'details') showDetails(msg);
       if (msg.k === 'streams') showStreams(msg);
@@ -1363,13 +1406,17 @@
   }
 
   // A paged grid asks the PC for its next page when its end comes near, once per page.
-  const pagers = [{ page: 'catalog', cmd: 'catalogMore' }, { page: 'folder', cmd: 'folderMore' }];
+  const pagers = [
+    { status: 'catalog-status', cmd: 'catalogMore' },
+    { status: 'folder-status', cmd: 'folderMore' },
+    { status: 'discover-status', cmd: 'discoverMore' },
+  ];
   function loadMoreIfNear() {
     pagers.forEach((pager) => {
-      const main = $(pager.page);
+      const status = $(pager.status);
       const msg = pager.msg;
-      if (main.hidden || !msg?.more || msg.loading || pager.requested === msg.items.length) return;
-      if (main.lastElementChild.getBoundingClientRect().top > innerHeight * 2) return;
+      if (!status.offsetParent || !msg?.more || msg.loading || pager.requested === msg.items.length) return;
+      if (status.getBoundingClientRect().top > innerHeight * 2) return;
       pager.requested = msg.items.length;
       send({ cmd: pager.cmd });
     });
@@ -1715,12 +1762,66 @@
     searchTimer = setTimeout(() => send({ cmd: 'search', query: $('search-input').value }), 400);
     renderSearch();
   });
+  // Clear goes back to recent searches and Discover, on the PC too, and keeps the keyboard up for a new search.
+  $('search-clear').addEventListener('click', () => {
+    clearTimeout(searchTimer);
+    $('search-input').value = '';
+    send({ cmd: 'search', query: '' });
+    renderSearch();
+    $('search-input').focus();
+  });
   $('search-input').addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return;
     clearTimeout(searchTimer);
     send({ cmd: 'search', query: $('search-input').value });
     $('search-input').blur();
   });
+  // Before you type: recent searches (tap to search again, ✕ to forget) and Discover, both from the PC.
+  let discover = null;
+
+  function showDiscover(msg) {
+    discover = msg;
+    pagers[2].msg = msg;
+    $('recent-section').hidden = !msg.recent.length;
+    $('recent-list').replaceChildren(...msg.recent.map((query) => {
+      const row = el('div', 'recent search-box');
+      const again = el('button', '', query);
+      again.addEventListener('click', () => {
+        $('search-input').value = query;
+        send({ cmd: 'search', query });
+        renderSearch();
+      });
+      const forget = el('button', '', '✕');
+      forget.setAttribute('aria-label', `Remove ${query}`);
+      forget.addEventListener('click', () => send({ cmd: 'searchRemove', query }));
+      row.append(again, forget);
+      return row;
+    }));
+    picker($('pick-type'), msg.types, msg.type, 'discoverType');
+    picker($('pick-catalog'), msg.catalogs, msg.catalog, 'discoverCatalog');
+    picker($('pick-genre'), msg.genres, msg.genre, 'discoverGenre');
+    $('discover-source').textContent = msg.source || '';
+    fillGrid($('discover-grid'), msg.items, msg.shape, (i) => ({ from: 'discover', item: i }));
+    pageStatus($('discover-status'), { ...msg, count: msg.items.length });
+    loadMoreIfNear();
+  }
+
+  // A native picker (the phone's own wheel) for one of Discover's dropdowns; choosing sends it to the PC.
+  function picker(select, options, selected, cmd) {
+    const signature = JSON.stringify(options);
+    if (select.dataset.options !== signature) {
+      select.dataset.options = signature;
+      select.replaceChildren(...options.map((option) => {
+        const item = el('option', '', option.label);
+        item.value = option.key;
+        return item;
+      }));
+      select.onchange = () => send({ cmd, value: select.value });
+    }
+    select.value = selected ?? '';
+    select.disabled = options.length < 2;
+  }
+
   function showSearch(msg) {
     searchResults = msg;
     renderSearch();
@@ -1732,8 +1833,10 @@
       row.items.map((item, i) => posterTile(item, row.shape, { from: 'search', row: row.key, item: i })))));
     const searching = typed && searchResults.loading;
     if (searching) $('search-rows').append(loader(rows.length ? 'Loading more results…' : 'Searching…'));
-    $('search-empty').hidden = rows.length > 0 || searching;
-    $('search-empty').textContent = !typed ? 'Type to search. Results open on your PC.' : 'No results.';
+    $('search-empty').hidden = !typed || rows.length > 0 || searching;
+    $('search-empty').textContent = 'No results.';
+    $('search-start').hidden = Boolean(typed);
+    if (!typed) loadMoreIfNear();
   }
 
   // A spinner with what it is waiting for.
