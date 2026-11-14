@@ -219,7 +219,9 @@
   main:not([hidden]) { animation: view-in 0.35s var(--ease); }
 
   /* Details and Sources */
-  .page-bar { display: flex; align-items: center; gap: 8px; }
+  .stream-filter { display: flex; align-items: center; gap: 8px; }
+  .stream-filter .chips { flex: 1; min-width: 0; margin-right: 0; padding-right: 0; }
+  .stream-filter .btn { flex: none; }
   .grow { flex: 1; }
   .detail-hero, .stream-hero { position: relative; overflow: hidden; border-radius: var(--r-card); background: var(--ctp-surface0);
     aspect-ratio: 4 / 3; max-height: 46dvh; }
@@ -275,7 +277,7 @@
   .sk-button { height: 44px; }
   .sk-chip { width: 96px; height: 32px; border-radius: 9999px; }
   .sk-episode { height: 92px; border-radius: var(--r-card); }
-  #details.is-loading > :not(.page-bar):not(#d-skeleton) { display: none; }
+  #details.is-loading > :not(#d-skeleton) { display: none; }
   #details:not(.is-loading) #d-skeleton { display: none; }
   .addon-loading { display: flex; align-items: center; gap: 8px; }
   .resume-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px;
@@ -524,7 +526,6 @@
 
 <!-- The sources for what is about to play, following the PC: tap one to play it. -->
 <main id="streams" class="browse" hidden>
-  <div class="page-bar"><button class="btn btn-sm btn-gray" data-back>Back</button><span class="grow"></span><button class="btn btn-sm btn-gray" id="s-reload">Reload</button></div>
   <div class="stream-hero">
     <img id="s-bg" alt="">
     <div class="shade"></div>
@@ -538,7 +539,11 @@
       <button id="s-start-btn" aria-pressed="false">Start from beginning</button>
     </div>
   </div>
-  <div class="chips" id="s-addons"></div>
+  <!-- The addons as filters, and Reload at the end of their row. -->
+  <div class="stream-filter">
+    <div class="chips" id="s-addons"></div>
+    <button class="btn btn-sm btn-gray" id="s-reload">Reload</button>
+  </div>
   <div id="s-list" class="stream-list"></div>
   <div class="card t-sub text-sub" id="s-empty" hidden></div>
 </main>
