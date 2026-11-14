@@ -346,8 +346,12 @@
   body:has(#player:not([hidden])) .backdrop.on { opacity: 0.4; }
   .latte body:has(#player:not([hidden])) .backdrop.on { opacity: 0.3; }
 
+  /* A natural shadow: a soft contact shadow close in, and a faint wide one, so it lifts without darkening the text below. */
   .hero { position: relative; width: 100%; aspect-ratio: 16 / 9; overflow: hidden; border-radius: var(--r-card);
-    background: var(--ctp-surface0); box-shadow: var(--shadow-3); }
+    background: var(--ctp-surface0);
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--ctp-crust) 25%, transparent),
+      0 6px 16px -6px color-mix(in srgb, var(--ctp-crust) 45%, transparent),
+      0 18px 36px -18px color-mix(in srgb, var(--ctp-crust) 40%, transparent); }
   .hero > img#art { width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0; transition: opacity 0.5s var(--ease); }
   .hero > img#art.on { opacity: 1; }
   .hero .shade { position: absolute; inset: 0;
@@ -386,7 +390,9 @@
   .tool:disabled { opacity: 0.45; }
   .tool .ic { width: 22px; height: 22px; }
   .media, .deck { width: 100%; display: flex; flex-direction: column; gap: 20px; min-width: 0; }
-  .media { min-height: 0; max-height: 100%; overflow-y: auto; gap: 14px; }
+  /* It scrolls, which also clips sideways: room at the sides (and below) so the card's shadow isn't cut off. */
+  .media { min-height: 0; max-height: 100%; overflow-y: auto; gap: 14px;
+    width: auto; margin-inline: -16px; padding: 4px 16px 12px; }
   .deck { flex-shrink: 0; }
   .hero { max-height: 36dvh; }
 
