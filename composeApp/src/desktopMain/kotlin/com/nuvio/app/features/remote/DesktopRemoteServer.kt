@@ -14,7 +14,10 @@ import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.EmbeddedServer
 import io.ktor.server.engine.embeddedServer
+import io.ktor.http.HttpStatusCode
 import io.ktor.server.response.header
+import io.ktor.server.response.respond
+import io.ktor.server.response.respondBytes
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
@@ -46,6 +49,7 @@ import org.jetbrains.skia.ImageInfo
 internal object DesktopRemoteServer : RemoteServerPlatform {
     private const val ENABLED_KEY = "enabled"
     private const val PORT_KEY = "port"
+    private val ICON_SIZES = setOf("180", "192", "512")
     private val store = DesktopStorage.store("nuvio_remote_settings")
     private var server: EmbeddedServer<*, *>? = null
 
@@ -76,6 +80,15 @@ internal object DesktopRemoteServer : RemoteServerPlatform {
                 get("/cuppa.css") {
                     call.response.header("Cache-Control", "no-store")
                     call.respondText(resource("cuppa.css"), ContentType.Text.CSS)
+                }
+                // "Add to Home Screen": the manifest and icons, so the remote opens full screen like an app.
+                get("/manifest.webmanifest") {
+                    call.respondText(resource("manifest.webmanifest"), ContentType.parse("application/manifest+json"))
+                }
+                get("/icon-{size}.png") {
+                    val bytes = call.parameters["size"]?.takeIf { it in ICON_SIZES }
+                        ?.let { javaClass.getResource("/remote/icon-$it.png")?.readBytes() }
+                    if (bytes == null) call.respond(HttpStatusCode.NotFound) else call.respondBytes(bytes, ContentType.Image.PNG)
                 }
                 webSocket("/ws") {
                     val cardMenus = RemoteCardMenuSession()
