@@ -140,28 +140,21 @@
     transition: width 0.25s var(--ease), background-color 0.25s; }
   .hero-dots i.on { width: 20px; background: var(--ctp-text); }
 
-  #home[data-layout="official"] .hero-strip { margin-inline: -16px; padding-inline: 0; scroll-padding-inline: 0; gap: 0; }
-  #home[data-layout="official"] .hero-card { border-radius: 0; min-height: min(70dvh, 133vw); background: transparent; }
-  /* Official fades into the page at its top and bottom edges; its info sits above the bottom fade. */
-  #home[data-layout="official"] .hero-card :is(img.bg, .shade) {
+  /* Official's hero and the Persistent Hero: edge to edge over the blurred backdrop, fading in at the top and out
+     at the bottom; the info sits above the bottom fade. */
+  #home[data-layout="official"] .hero-strip, .persistent-hero { margin-inline: -16px; padding-inline: 0; scroll-padding-inline: 0; gap: 0; }
+  :is(#home[data-layout="official"], .persistent-hero) .hero-card { border-radius: 0; min-height: min(70dvh, 133vw); background: transparent; }
+  :is(#home[data-layout="official"], .persistent-hero) .hero-card :is(img.bg, .shade) {
     -webkit-mask-image: linear-gradient(to bottom, transparent, #000 14%, #000 78%, transparent);
     mask-image: linear-gradient(to bottom, transparent, #000 14%, #000 78%, transparent); }
-  #home[data-layout="official"] .hero-card .info { padding: 0 20px 44px; }
+  :is(#home[data-layout="official"], .persistent-hero) .hero-card .info { padding: 0 20px 44px; }
 
   #home[data-layout="scroll_posters"] .row-scroll { margin-inline: 0; padding-inline: 0; scroll-padding-inline: 0; }
   #home[data-layout="scroll_posters"] .hero-card { min-height: min(50dvh, 75vw); }
   #home[data-layout="scroll_posters"] .hero-card .desc { -webkit-line-clamp: 2; }
 
-  .persistent-hero { position: sticky; top: 0; z-index: 2; margin-inline: -16px; min-height: min(46dvh, 440px); display: flex; overflow: hidden;
-    background: var(--ctp-mantle); }
-  .persistent-hero .hero-card { flex: 1; min-height: 0; border-radius: 0; background: transparent; }
-  .persistent-hero .hero-card img.bg { -webkit-mask-image: linear-gradient(to bottom, transparent, #000 14%, #000 45%, transparent 98%);
-    mask-image: linear-gradient(to bottom, transparent, #000 14%, #000 45%, transparent 98%); }
-  .persistent-hero .hero-card .shade { background: linear-gradient(to top, var(--ctp-mantle) 4%, transparent 60%); }
-  .persistent-hero .hero-card .info { padding: 0 20px 20px; }
-  .persistent-hero .hero-card .logo { max-height: 64px; }
-  /* The pinned artwork replaces the blurred one, as on the PC. */
-  body:has(#home[data-layout="persistent_hero"]:not([hidden])) .home-backdrop { display: none; }
+  .persistent-hero { display: flex; }
+  .persistent-hero .hero-card { flex: 1; }
   .tile[aria-current="true"] .art::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
     box-shadow: inset 0 0 0 3px var(--accent); }
 
@@ -1271,7 +1264,8 @@
 
   function updateHomeBackdrop() {
     $('hero-dots').querySelectorAll('i').forEach((dot, i) => dot.classList.toggle('on', i === homeHeroIndex));
-    const source = homeHeroes[homeHeroIndex]?.image || null;
+    // The blurred artwork behind Home: the carousel's current title, or the Persistent Hero's.
+    const source = (homeLayout === 'persistent_hero' ? pcHero?.image : homeHeroes[homeHeroIndex]?.image) || null;
     if ((homeBackdropRequest?.getAttribute('src') ?? null) === source) return;
     homeBackdropRequest = source ? new Image() : null;
     if (!source) {
@@ -1437,6 +1431,7 @@
     const pane = $('persistent-hero');
     const show = homeLayout === 'persistent_hero' && pcHero !== null;
     pane.hidden = !show;
+    updateHomeBackdrop();
     const content = show ? JSON.stringify(pcHero) : '';
     if (content === pcHeroContent) return;
     pcHeroContent = content;
