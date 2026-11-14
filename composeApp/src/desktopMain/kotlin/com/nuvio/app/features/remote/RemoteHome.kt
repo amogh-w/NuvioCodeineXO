@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.JsonArrayBuilder
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -43,8 +44,6 @@ import kotlinx.serialization.json.putJsonObject
  * same actions as the sidebar, a poster or a Continue Watching card on the PC.
  */
 internal object RemoteHome {
-    /** Posters per row on the phone; the PC's "View All" has the rest. */
-    private const val ROW_LIMIT = 24
 
     /**
      * `{"k":"home","hero":[…],"continue":[…],"rows":[…]}`, sent whenever Home's content changes. Rows follow the
@@ -55,7 +54,7 @@ internal object RemoteHome {
         HomeCatalogSettingsRepository.uiState,
         CollectionRepository.collections,
         RemoteAppBridge.continueWatching,
-        RemoteAppBridge.heroItems.combine(RemoteCatalog.viewAll) { heroes, viewAll -> heroes to viewAll },
+        RemoteAppBridge.heroItems.combine(RemoteViewAll.rows) { heroes, viewAll -> heroes to viewAll["home"].orEmpty() },
     ) { home, settings, collections, resume, (loadedHeroes, viewAll) ->
         val sections = home.sections.associateBy { it.key }
         val collectionsById = collections.associateBy { it.id }
@@ -75,13 +74,13 @@ internal object RemoteHome {
                 heroes.forEach { (meta, info) -> addJsonObject { hero(meta, info) } }
             }
             putJsonArray("continue") { resume.forEach { addJsonObject { continueWatching(it, persistentHero) } } }
-            put("continueViewAll", RemoteCatalog.CONTINUE_WATCHING in viewAll)
+            put("continueViewAll", RemoteViewAll.CONTINUE_WATCHING in viewAll)
             putJsonArray("rows") {
                 settings.items.filter { it.enabled }.forEach { entry ->
                     if (entry.isCollection) {
                         collectionsById[entry.collectionId]?.takeIf { it.folders.isNotEmpty() }?.let { addJsonObject { collection(it, it.id in viewAll) } }
                     } else {
-                        sections[entry.key]?.takeIf { it.items.isNotEmpty() }?.let { addJsonObject { row(it, heroKeys = persistentHero, viewAll = it.key in viewAll) } }
+                        sections[entry.key]?.takeIf { it.items.isNotEmpty() }?.let { addJsonObject { catalogRow(it, heroKeys = persistentHero, viewAll = it.key in viewAll) } }
                     }
                 }
             }
@@ -98,21 +97,26 @@ internal object RemoteHome {
     }.distinctUntilChanged()
 
     /**
-     * `{"k":"catalog","title":…,"collection":…,"loading":…,"more":…,"items":[…]}`: the page a row's "View All"
-     * opened on the PC (`title` is null when none is): a catalog as far as it has loaded, or a collection's folders
-     * by its `collection` id, or Continue Watching, which the phone draws from Home's rows.
+     * `{"k":"catalog","title":…,"collection":…}`: the page a row's "View All" opened on the PC, and for a catalog
+     * its titles as far as they have loaded (`items`, `loading`, `more`). A collection's folders (its `collection`
+     * id) and Continue Watching the phone draws from Home's rows.
      */
-    val catalogMessages: Flow<String> get() = combine(RemoteCatalog.page, CatalogRepository.uiState) { page, catalog ->
+    val catalogMessages: Flow<String> get() = combine(
+        RemoteAppBridge.route,
+        RemoteViewAll.page,
+        CatalogRepository.uiState,
+    ) { route, page, catalog ->
+        val isCatalog = route == "catalog"
+        val items = if (isCatalog) catalog.items else emptyList()
         buildJsonObject {
             put("k", "catalog")
             put("title", page?.title)
             put("collection", page?.collectionId)
-            put("loading", catalog.isLoading)
-            put("more", catalog.canLoadMore)
-            put("error", catalog.errorMessage)
-            val landscape = catalog.items.firstOrNull()?.posterShape == PosterShape.Landscape
-            put("shape", if (landscape) "landscape" else "poster")
-            putJsonArray("items") { if (page != null) catalog.items.forEach { poster(it, landscape, heroKey = false) } }
+            put("loading", isCatalog && catalog.isLoading)
+            put("more", isCatalog && catalog.canLoadMore)
+            put("error", catalog.errorMessage.takeIf { isCatalog })
+            put("shape", shapeOf(items))
+            putJsonArray("items") { items.forEach { poster(it, items.isLandscape()) } }
         }.toString()
     }.distinctUntilChanged()
 
@@ -121,7 +125,7 @@ internal object RemoteHome {
         buildJsonObject {
             put("k", "search")
             put("loading", search.isLoading)
-            putJsonArray("rows") { search.sections.forEachIndexed { index, section -> addJsonObject { row(section, "$index") } } }
+            putJsonArray("rows") { search.sections.forEachIndexed { index, section -> addJsonObject { catalogRow(section, "$index") } } }
         }.toString()
     }.distinctUntilChanged()
 
@@ -152,8 +156,8 @@ internal object RemoteHome {
             "search" -> json["query"]?.jsonPrimitive?.contentOrNull
                 ?.take(200)
                 ?.let(RemoteAppBridge::requestSearch)
-            "viewAll" -> row?.let(RemoteCatalog::open)
-            "catalogMore" -> SwingUtilities.invokeLater { if (RemoteCatalog.page.value != null) CatalogRepository.loadMore() }
+            "viewAll" -> row?.let(RemoteViewAll::open)
+            "catalogMore" -> SwingUtilities.invokeLater { if (RemoteAppBridge.route.value == "catalog") CatalogRepository.loadMore() }
             "heroPick" -> {
                 val meta = if (json["from"]?.jsonPrimitive?.contentOrNull == "continue") {
                     RemoteAppBridge.continueWatching.value.getOrNull(item ?: -1)?.toPersistentHeroPreview()
@@ -181,14 +185,9 @@ internal object RemoteHome {
             "row" -> HomeRepository.uiState.value.sections.firstOrNull { it.key == row }?.items?.getOrNull(item)
             "search" -> SearchRepository.uiState.value.sections.getOrNull(row?.toIntOrNull() ?: -1)?.items?.getOrNull(item)
             "catalog" -> CatalogRepository.uiState.value.items.getOrNull(item)
+            "folder" -> RemoteFolderPage.posterAt(row, item)
             else -> null
         }
-    }
-
-    private fun kotlinx.serialization.json.JsonObjectBuilder.posterIdentity(meta: MetaPreview) {
-        put("id", meta.id)
-        put("type", meta.type)
-        put("name", meta.name)
     }
 
     /** The hero's info rows, with the same rating settings as the PC's hero. */
@@ -200,7 +199,7 @@ internal object RemoteHome {
         )
     }
 
-    private fun kotlinx.serialization.json.JsonObjectBuilder.hero(meta: MetaPreview, info: HeroInfo) {
+    private fun JsonObjectBuilder.hero(meta: MetaPreview, info: HeroInfo) {
         posterIdentity(meta)
         put("key", meta.stableKey())
         put("image", meta.banner ?: meta.poster ?: meta.landscapePoster)
@@ -222,7 +221,7 @@ internal object RemoteHome {
         }
     }
 
-    private fun kotlinx.serialization.json.JsonObjectBuilder.continueWatching(item: ContinueWatchingItem, heroKey: Boolean) {
+    private fun JsonObjectBuilder.continueWatching(item: ContinueWatchingItem, heroKey: Boolean) {
         put("key", continueWatchingItemKey(item))
         if (heroKey) put("heroKey", item.toPersistentHeroPreview().stableKey())
         put("title", item.title)
@@ -236,7 +235,7 @@ internal object RemoteHome {
     }
 
     /** A collection's row: its folders as tiles, opened on the PC by `folder`. */
-    private fun kotlinx.serialization.json.JsonObjectBuilder.collection(collection: Collection, viewAll: Boolean) {
+    private fun JsonObjectBuilder.collection(collection: Collection, viewAll: Boolean) {
         put("kind", "collection")
         put("key", collection.id)
         put("title", collection.title)
@@ -252,26 +251,42 @@ internal object RemoteHome {
             }
         }
     }
+}
 
-    private fun kotlinx.serialization.json.JsonObjectBuilder.row(
-        section: HomeCatalogSection,
-        key: String = section.key,
-        heroKeys: Boolean = false,
-        viewAll: Boolean = false,
-    ) {
-        put("kind", "catalog")
-        put("key", key)
-        put("title", section.title)
-        // "View All" where the PC shows it; it opens the whole catalog, like the PC's button.
-        put("viewAll", viewAll)
-        val landscape = section.items.firstOrNull()?.posterShape == PosterShape.Landscape
-        put("shape", if (landscape) "landscape" else "poster")
-        putJsonArray("items") { section.items.take(ROW_LIMIT).forEach { poster(it, landscape, heroKeys) } }
-    }
+/** Posters per row on the phone; "View All" has the rest. */
+private const val ROW_LIMIT = 24
 
-    private fun JsonArrayBuilder.poster(meta: MetaPreview, landscape: Boolean, heroKey: Boolean) = addJsonObject {
-        posterIdentity(meta)
-        if (heroKey) put("heroKey", meta.stableKey())
-        put("image", if (landscape) meta.landscapePoster ?: meta.banner ?: meta.poster else meta.poster ?: meta.landscapePoster)
-    }
+// The phone's posters and rows, shared by Home, Search, View All and collection folders.
+
+internal fun List<MetaPreview>.isLandscape(): Boolean = firstOrNull()?.posterShape == PosterShape.Landscape
+
+internal fun shapeOf(items: List<MetaPreview>): String = if (items.isLandscape()) "landscape" else "poster"
+
+internal fun JsonObjectBuilder.posterIdentity(meta: MetaPreview) {
+    put("id", meta.id)
+    put("type", meta.type)
+    put("name", meta.name)
+    put("year", meta.releaseInfo)
+}
+
+/** A row of posters; `viewAll` where the PC shows it, `heroKeys` for the Persistent Hero to match its cards. */
+internal fun JsonObjectBuilder.catalogRow(
+    section: HomeCatalogSection,
+    key: String = section.key,
+    title: String = section.title,
+    viewAll: Boolean = false,
+    heroKeys: Boolean = false,
+) {
+    put("kind", "catalog")
+    put("key", key)
+    put("title", title)
+    put("viewAll", viewAll)
+    put("shape", shapeOf(section.items))
+    putJsonArray("items") { section.items.take(ROW_LIMIT).forEach { poster(it, section.items.isLandscape(), heroKeys) } }
+}
+
+internal fun JsonArrayBuilder.poster(meta: MetaPreview, landscape: Boolean, heroKey: Boolean = false) = addJsonObject {
+    posterIdentity(meta)
+    if (heroKey) put("heroKey", meta.stableKey())
+    put("image", if (landscape) meta.landscapePoster ?: meta.banner ?: meta.poster else meta.poster ?: meta.landscapePoster)
 }

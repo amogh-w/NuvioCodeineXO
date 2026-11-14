@@ -113,6 +113,7 @@ internal object DesktopRemoteServer : RemoteServerPlatform {
                     val search = launch { RemoteHome.searchMessages.collect { send(Frame.Text(it)) } }
                     val hero = launch { RemoteHome.heroMessages.collect { send(Frame.Text(it)) } }
                     val catalog = launch { RemoteHome.catalogMessages.collect { send(Frame.Text(it)) } }
+                    val folder = launch { RemoteFolderPage.messages.collect { send(Frame.Text(it)) } }
                     // Following the PC into a title, its sources and the player.
                     val pages = launch {
                         launch { RemoteDetails.routeMessages.collect { send(Frame.Text(it)) } }
@@ -139,6 +140,7 @@ internal object DesktopRemoteServer : RemoteServerPlatform {
                         search.cancel()
                         hero.cancel()
                         catalog.cancel()
+                        folder.cancel()
                         pages.cancel()
                     }
                 }
@@ -198,6 +200,7 @@ internal object DesktopRemoteServer : RemoteServerPlatform {
             "dpadBack" -> RemoteAppBridge.send(RemoteAppBridge.Command.Back(fromDpad = true))
             "okLong" -> SwingUtilities.invokeLater { RemoteNavigationDispatcher.openContextMenu() }
             "tab", "open", "folder", "resume", "search", "layout", "heroPick", "viewAll", "catalogMore" -> RemoteHome.handle(cmd, json)
+            "folderTab", "folderMore" -> RemoteFolderPage.handle(cmd, json)
             "fillerDetection", "hideFillers" -> RemoteDetails.handle(cmd, json)
             "back", "play", "episode", "saved", "watched", "stream", "reloadStreams", "fromStart" -> RemoteDetails.handle(cmd, json)
             "player" -> {

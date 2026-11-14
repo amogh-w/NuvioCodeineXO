@@ -169,16 +169,22 @@
   .row-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
   .row-head .row-title { flex: 1; min-width: 0; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* "View All": the whole catalog as a grid, loading more as it scrolls, like the PC. */
-  #catalog { gap: 18px; }
+  .grid-page { gap: 18px; }
   .catalog-head { display: flex; align-items: center; gap: 12px; padding-top: 4px; }
   .catalog-head h2 { flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere; }
   /* Tiles take the grid's columns here, not the fixed widths they have in Home's rows. */
-  #catalog .catalog-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px 12px; }
-  #catalog .catalog-grid.landscape { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 12px; }
-  #catalog .catalog-grid > .tile { width: auto; min-width: 0; max-width: none; }
-  #catalog .catalog-grid .name { font-size: 12.5px; }
+  .grid-page .catalog-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px 12px; }
+  .grid-page .catalog-grid.landscape { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 12px; }
+  .grid-page .catalog-grid > .tile { width: auto; min-width: 0; max-width: none; }
+  .grid-page .catalog-grid .name { font-size: 12.5px; }
+  /* A folder's tabs, like the PC's: they scroll sideways when there are many. */
+  .folder-tabs { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin-inline: -16px; padding-inline: 16px; }
+  .folder-tabs::-webkit-scrollbar { display: none; }
+  .folder-tabs .btn { flex: none; }
+  .row-note { min-height: 64px; display: flex; align-items: center; }
+  .tile .year { font-size: 12px; color: var(--ctp-subtext0); margin-top: -4px; }
   .catalog-status { display: flex; justify-content: center; align-items: center; gap: 10px; min-height: 64px; }
-  @media (min-width: 480px) { #catalog .catalog-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  @media (min-width: 480px) { .grid-page .catalog-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
   .row-title { margin: 0 0 12px; font-size: 20px; font-weight: 600; }
   .tile { flex: none; scroll-snap-align: start; display: flex; flex-direction: column; gap: 8px; text-align: left; transition: transform 0.15s var(--ease); }
   .tile:active { transform: scale(0.96); }
@@ -458,10 +464,19 @@
   <div class="card t-sub text-sub" id="home-empty" hidden>Nothing on Home yet.</div>
 </main>
 
-<main id="catalog" class="browse" hidden>
+<main id="catalog" class="browse grid-page" hidden>
   <div class="catalog-head"><h2 class="t-title2" id="catalog-title"></h2></div>
   <div class="catalog-grid" id="catalog-grid"></div>
   <div class="catalog-status text-sub" id="catalog-status"></div>
+</main>
+
+<!-- A collection folder's page, like the PC's: rows with View All, or tabs over a grid. -->
+<main id="folder" class="browse grid-page" hidden>
+  <div class="catalog-head"><h2 class="t-title2" id="folder-title"></h2></div>
+  <div class="folder-tabs" id="folder-tabs" hidden></div>
+  <div id="folder-rows" class="rows"></div>
+  <div class="catalog-grid" id="folder-grid" hidden></div>
+  <div class="catalog-status text-sub" id="folder-status"></div>
 </main>
 
 <main id="search" class="browse" hidden>
@@ -683,6 +698,7 @@
       if (msg.k === 'hero') showPcHero(msg.hero);
       if (msg.k === 'search') showSearch(msg);
       if (msg.k === 'catalog') showCatalog(msg);
+      if (msg.k === 'folder') showFolder(msg);
       if (msg.k === 'route') { pcRoute = msg.route; updateView(); }
       if (msg.k === 'details') showDetails(msg);
       if (msg.k === 'streams') showStreams(msg);
@@ -873,12 +889,12 @@
     }
     if (detailsVisible && detailsWasHidden && !awaitingDetails && details?.name) renderEpisodes();
     setHidden('streams', !(browsing && pcRoute === 'streams'));
-    const catalogWasHidden = $('catalog').hidden;
-    setHidden('catalog', !(browsing && ['catalog', 'collection', 'continue'].includes(pcRoute)));
-    if (catalogWasHidden && !$('catalog').hidden) {
-      scrollTo(0, 0);
-      renderGridPage();
-    }
+    // A page shown from the top when it opens: View All and folders.
+    [['catalog', ['catalog', 'collection', 'continue'], renderCatalog], ['folder', ['folder'], renderFolder]].forEach(([page, routes, render]) => {
+      const opening = $(page).hidden && browsing && routes.includes(pcRoute);
+      setHidden(page, !(browsing && routes.includes(pcRoute)));
+      if (opening) { scrollTo(0, 0); render(); }
+    });
     const hideDpad = playing || !(dpadMode || pcTab || pcPage);
     if (hideDpad) {
       stopDpadPress();
@@ -1054,6 +1070,7 @@
     const art = el('div', 'art');
     art.append(img(item.image));
     tile.append(art, el('span', 'name', item.name));
+    if (item.year) tile.append(el('span', 'year', item.year));
     const open = () => {
       markBusy(art);
       if (!folder) awaitingDetails = true;
@@ -1321,68 +1338,110 @@
     }
   }
 
-  // ─── View All: the catalog page open on the PC, as a grid; scrolling to its end loads more, as on the PC ───
-  let catalog = null;
-  let catalogKeys = [];
-  let catalogRequested = -1;
+  // ─── View All and collection folders, following the PC ───
+  // A grid only grows at its end as the PC loads pages: the tiles already there stay, so images and scroll stay put.
+  function fillGrid(grid, items, shape, locate) {
+    const keys = items.map((item) => `${item.type}:${item.id}`);
+    const old = grid.keys || [];
+    const kept = old.length <= keys.length && old.every((key, i) => key === keys[i]) ? old.length : 0;
+    if (!kept) grid.replaceChildren();
+    grid.classList.toggle('landscape', shape === 'landscape');
+    items.slice(kept).forEach((item, i) => grid.append(posterTile(item, shape, locate(kept + i))));
+    grid.keys = keys;
+  }
 
-  // "View All" pages, following the PC: a catalog (paged), a collection's folders, or Continue Watching.
+  // The line under a page: loading, or why it is empty.
+  function pageStatus(status, { loading, error, count }) {
+    status.replaceChildren();
+    if (loading) status.append(el('span', 'spin-ring'), el('span', '', count ? 'Loading more…' : 'Loading…'));
+    else if (!count) status.append(el('span', '', error || 'Nothing here yet.'));
+  }
+
+  // A paged grid asks the PC for its next page when its end comes near, once per page.
+  const pagers = [{ page: 'catalog', cmd: 'catalogMore' }, { page: 'folder', cmd: 'folderMore' }];
+  function loadMoreIfNear() {
+    pagers.forEach((pager) => {
+      const main = $(pager.page);
+      const msg = pager.msg;
+      if (main.hidden || !msg?.more || msg.loading || pager.requested === msg.items.length) return;
+      if (main.lastElementChild.getBoundingClientRect().top > innerHeight * 2) return;
+      pager.requested = msg.items.length;
+      send({ cmd: pager.cmd });
+    });
+  }
+  addEventListener('scroll', loadMoreIfNear, { passive: true });
+
+  // View All: a catalog, paged; a collection's folders and Continue Watching come from Home's rows.
+  let catalog = null;
   let lastHome = null;
-  let gridMode = null;
 
   function showCatalog(msg) {
     catalog = msg;
-    renderGridPage();
+    pagers[0].msg = msg;
+    renderCatalog();
   }
 
-  function renderGridPage() {
-    if (!catalog) return;
-    const mode = ['catalog', 'collection', 'continue'].includes(pcRoute) ? pcRoute : null;
-    if (!mode) return;
+  function renderCatalog() {
+    if (!catalog || $('catalog').hidden) return;
     $('catalog-title').textContent = catalog.title || '';
     const grid = $('catalog-grid');
-    const status = $('catalog-status');
-    status.replaceChildren();
-    if (mode !== 'catalog') {
-      // These come from Home's rows, which the phone already has.
-      gridMode = mode;
-      catalogKeys = [];
-      const row = mode === 'collection' ? lastHome?.rows.find((r) => r.kind === 'collection' && r.key === catalog.collection) : null;
-      const tiles = mode === 'continue'
-        ? (lastHome?.continue || []).map(resumeTile)
-        : (row?.items || []).map((item, i) => posterTile(item, row.shape, { from: 'row', row: row.key, item: i }, true));
-      grid.classList.toggle('landscape', mode === 'continue' || row?.shape === 'landscape');
-      grid.replaceChildren(...tiles);
-      if (!tiles.length) status.append(el('span', '', 'Nothing here yet.'));
+    if (pcRoute === 'catalog') {
+      fillGrid(grid, catalog.items, catalog.shape, (i) => ({ from: 'catalog', item: i }));
+      pageStatus($('catalog-status'), { ...catalog, count: catalog.items.length });
+      loadMoreIfNear();
       return;
     }
-    grid.classList.toggle('landscape', catalog.shape === 'landscape');
-    const keys = catalog.items.map((item) => `${item.type}:${item.id}`);
-    // Pages only add titles at the end: keep the tiles there, so images and scroll stay put.
-    const appended = gridMode === 'catalog' && catalogKeys.length <= keys.length && catalogKeys.every((key, i) => key === keys[i]);
-    if (!appended) grid.replaceChildren();
-    catalog.items.slice(appended ? catalogKeys.length : 0).forEach((item, offset) => {
-      const index = (appended ? catalogKeys.length : 0) + offset;
-      grid.append(posterTile(item, catalog.shape, { from: 'catalog', item: index }));
-    });
-    gridMode = 'catalog';
-    catalogKeys = keys;
-    if (!catalog.loading) catalogRequested = -1;
-    if (catalog.loading) status.append(el('span', 'spin-ring'), el('span', '', catalog.items.length ? 'Loading more…' : 'Loading…'));
-    else if (catalog.error && !catalog.items.length) status.append(el('span', '', catalog.error));
-    else if (!catalog.items.length) status.append(el('span', '', 'Nothing here yet.'));
-    requestCatalogMore();
+    const row = lastHome?.rows.find((r) => r.kind === 'collection' && r.key === catalog.collection);
+    const tiles = pcRoute === 'continue' ? (lastHome?.continue || []).map(resumeTile)
+      : (row?.items || []).map((item, i) => posterTile(item, row.shape, { from: 'row', row: row.key, item: i }, true));
+    grid.keys = null;
+    grid.classList.toggle('landscape', pcRoute === 'continue' || row?.shape === 'landscape');
+    grid.replaceChildren(...tiles);
+    pageStatus($('catalog-status'), { count: tiles.length });
   }
 
-  // Asks the PC for the next page once the end of the grid is near.
-  function requestCatalogMore() {
-    if (pcRoute !== 'catalog' || !catalog?.more || catalog.loading || $('catalog').hidden) return;
-    if (catalogRequested === catalog.items.length) return;
-    if ($('catalog-status').getBoundingClientRect().top > innerHeight * 2) return;
-    catalogRequested = catalog.items.length;
-    send({ cmd: 'catalogMore' });
+  // A collection folder: a row per source with View All, or the PC's tabs over a paged grid.
+  let folder = null;
+
+  function showFolder(msg) {
+    folder = msg;
+    pagers[1].msg = msg.items ? msg : null;
+    renderFolder();
   }
-  addEventListener('scroll', requestCatalogMore, { passive: true });
+
+  function folderRow(row) {
+    const section = rowSection(row.title, row.items.map((item, i) => posterTile(item, row.shape, { from: 'folder', row: row.key, item: i })),
+      row.viewAll ? () => send({ cmd: 'viewAll', row: row.key }) : null);
+    if (!row.items.length) {
+      section.querySelector('.row-scroll').append(...(row.loading
+        ? [el('div', 'skel sk-poster'), el('div', 'skel sk-poster'), el('div', 'skel sk-poster')]
+        : [el('div', 'row-note text-sub', row.error || 'Nothing here yet.')]));
+    }
+    return section;
+  }
+
+  function renderFolder() {
+    if (!folder?.title || $('folder').hidden) return;
+    $('folder-title').textContent = folder.title;
+    const tabbed = Boolean(folder.tabs);
+    $('folder-rows').hidden = tabbed;
+    $('folder-grid').hidden = !tabbed;
+    $('folder-tabs').hidden = !tabbed || folder.tabs.length < 2;
+    if (!tabbed) {
+      replaceRows($('folder-rows'), folder.rows.map(folderRow));
+      pageStatus($('folder-status'), { count: folder.rows.length });
+      return;
+    }
+    $('folder-tabs').replaceChildren(...folder.tabs.map((label, i) => {
+      const button = el('button', `btn btn-sm ${i === folder.tab ? '' : 'btn-gray'}`, label);
+      button.addEventListener('click', () => { if (i !== folder.tab) send({ cmd: 'folderTab', index: i }); });
+      return button;
+    }));
+    $('folder-tabs').children[folder.tab]?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    fillGrid($('folder-grid'), folder.items, folder.shape, (i) => ({ from: 'folder', item: i }));
+    pageStatus($('folder-status'), { ...folder, count: folder.items.length });
+    loadMoreIfNear();
+  }
 
   function showHome(msg) {
     showLayout(msg.layout);
@@ -1397,7 +1456,7 @@
         { from: 'row', row: row.key, item: i }, row.kind === 'collection')),
       row.viewAll ? () => send({ cmd: 'viewAll', row: row.key }) : null)));
     replaceRows($('home-rows'), sections);
-    if (!$('catalog').hidden && pcRoute !== 'catalog') renderGridPage();
+    if (pcRoute === 'collection' || pcRoute === 'continue') renderCatalog();
     const empty = !heroes.length && !sections.length;
     $('home-skeleton').hidden = !(empty && msg.loading);
     $('home-empty').hidden = !(empty && !msg.loading);
@@ -1445,8 +1504,8 @@
       return;
     }
     stopDpadPress();
-    const phonePage = $('remote').hidden && ['details', 'streams', 'catalog', 'collection', 'continue'].includes(pcRoute);
-    backPending(button, phonePage ? $(['collection', 'continue'].includes(pcRoute) ? 'catalog' : pcRoute) : null);
+    const phonePage = $('remote').hidden && ['details', 'streams', 'catalog', 'collection', 'continue', 'folder'].includes(pcRoute);
+    backPending(button, phonePage ? document.querySelector('main:not([hidden])') : null);
     send({ cmd: phonePage ? 'back' : 'dpadBack' });
   }));
 

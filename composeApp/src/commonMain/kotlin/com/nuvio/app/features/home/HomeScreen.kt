@@ -470,7 +470,7 @@ fun HomeScreen(
         // The phone remote: the rows that show "View All" here, and its taps on them, opened like the buttons here.
         val remoteViewAll = buildSet {
             if (openContinueWatching != null && continueWatchingPreferences.isVisible && continueWatchingItems.isNotEmpty()) {
-                add(com.nuvio.app.features.remote.RemoteCatalog.CONTINUE_WATCHING)
+                add(com.nuvio.app.features.remote.RemoteViewAll.CONTINUE_WATCHING)
             }
             keyedEnabledHomeItems.forEach { keyed ->
                 if (keyed.value.isCollection) {
@@ -482,16 +482,16 @@ fun HomeScreen(
                 }
             }
         }
-        LaunchedEffect(remoteViewAll) { com.nuvio.app.features.remote.RemoteCatalog.publishViewAll(remoteViewAll) }
+        LaunchedEffect(remoteViewAll) { com.nuvio.app.features.remote.RemoteViewAll.publishRows("home", remoteViewAll) }
         val openRemoteViewAll = androidx.compose.runtime.rememberUpdatedState { key: String ->
             when (key) {
-                com.nuvio.app.features.remote.RemoteCatalog.CONTINUE_WATCHING -> openContinueWatching?.invoke()
+                com.nuvio.app.features.remote.RemoteViewAll.CONTINUE_WATCHING -> openContinueWatching?.invoke()
                 else -> visibleCollections.firstOrNull { it.id == key }?.let { onCollectionClick?.invoke(it) }
                     ?: sectionsMap[key]?.let { onCatalogClick?.invoke(it) }
             }
         }
-        LaunchedEffect(com.nuvio.app.features.remote.RemoteCatalog.requests) {
-            com.nuvio.app.features.remote.RemoteCatalog.requests.collect { openRemoteViewAll.value(it) }
+        LaunchedEffect(com.nuvio.app.features.remote.RemoteViewAll.requests) {
+            com.nuvio.app.features.remote.RemoteViewAll.requests.collect { openRemoteViewAll.value(it) }
         }
         BindPosterNavigationPage(
             "home", activeProfileId to homeSettingsUiState.appInterface, navigationRows,

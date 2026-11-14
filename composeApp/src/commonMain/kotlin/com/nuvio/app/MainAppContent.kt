@@ -1633,7 +1633,7 @@ internal fun MainAppContent(
                                 val phoneBrowsingPage = when (destination) {
                                     is TabsRoute -> returningHome || selectedTab == AppScreenTab.Search
                                     is DetailRoute, is StreamRoute, is CatalogRoute, is CollectionFoldersRoute,
-                                    is ContinueWatchingRoute -> true
+                                    is ContinueWatchingRoute, is FolderDetailRoute -> true
                                     else -> false
                                 }
                                 val clearHomeFocus = returningHome &&
@@ -1648,11 +1648,11 @@ internal fun MainAppContent(
             }
             LaunchedEffect(currentRoute) {
                 // The "View All" page open here, which the phone remote follows.
-                com.nuvio.app.features.remote.RemoteCatalog.publishPage(
+                com.nuvio.app.features.remote.RemoteViewAll.publishPage(
                     when (val route = currentRoute) {
-                        is CatalogRoute -> com.nuvio.app.features.remote.RemoteCatalog.Page(route.title)
-                        is CollectionFoldersRoute -> com.nuvio.app.features.remote.RemoteCatalog.Page(route.title, route.collectionId)
-                        is ContinueWatchingRoute -> com.nuvio.app.features.remote.RemoteCatalog.Page(route.title)
+                        is CatalogRoute -> com.nuvio.app.features.remote.RemoteViewAll.Page(route.title)
+                        is CollectionFoldersRoute -> com.nuvio.app.features.remote.RemoteViewAll.Page(route.title, route.collectionId)
+                        is ContinueWatchingRoute -> com.nuvio.app.features.remote.RemoteViewAll.Page(route.title)
                         else -> null
                     },
                 )
@@ -1665,6 +1665,7 @@ internal fun MainAppContent(
                         is CatalogRoute -> "catalog"
                         is CollectionFoldersRoute -> "collection"
                         is ContinueWatchingRoute -> "continue"
+                        is FolderDetailRoute -> "folder"
                         else -> "other"
                     },
                 )
