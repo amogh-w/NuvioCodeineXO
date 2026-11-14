@@ -1594,7 +1594,8 @@ internal fun MainAppContent(
             fun clearKeyboardNavigationForPhoneBrowsing() {
                 remoteNavigation?.exitKeyboardNavigation(discardPosterOrigins = true)
             }
-            LaunchedEffect(Unit) {
+            // Keyed on the flow, so a hot reload that recreates the bridge reconnects the phone's commands.
+            LaunchedEffect(com.nuvio.app.features.remote.RemoteAppBridge.commands) {
                 com.nuvio.app.features.remote.RemoteAppBridge.commands.collect { command ->
                     when (command) {
                         is com.nuvio.app.features.remote.RemoteAppBridge.Command.SelectTab -> {

@@ -72,7 +72,7 @@
   .dpad .ok.pressed { transform: scale(0.95); background-color: var(--glass-accent); box-shadow: var(--glass-selected-rim); }
 
   /* Browsing: Home's hero and rows, Search, and the sidebar as a tab bar. */
-  .browse { justify-content: flex-start; align-items: stretch; gap: 22px; width: 100%; }
+  .browse { justify-content: flex-start; align-items: stretch; gap: 26px; width: 100%; }
   .bottom-controls { position: fixed; z-index: 5; left: max(10px, env(safe-area-inset-left));
     right: max(10px, env(safe-area-inset-right)); bottom: calc(env(safe-area-inset-bottom) + 10px);
     display: flex; justify-content: center; pointer-events: none; }
@@ -91,7 +91,7 @@
   #skip-segment { min-width: 0; font-size: 13px; line-height: 1.15; text-align: center; overflow-wrap: anywhere; }
   .pc-note { text-align: center; }
 
-  .hero-strip, .row-scroll { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none;
+  .hero-strip, .row-scroll { display: flex; gap: 14px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none;
     margin-inline: -16px; padding-inline: 16px; scroll-padding-inline: 16px; }
   .hero-strip::-webkit-scrollbar, .row-scroll::-webkit-scrollbar { display: none; }
   .home-backdrop { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; opacity: 0;
@@ -100,21 +100,63 @@
     filter: blur(56px) saturate(1.35); }
   body:has(#home:not([hidden])) .home-backdrop:has(img) { opacity: 0.42; }
   .latte body:has(#home:not([hidden])) .home-backdrop:has(img) { opacity: 0.29; }
-  .hero-card { position: relative; flex: 0 0 100%; scroll-snap-align: start; aspect-ratio: 4 / 5; max-height: 62dvh;
+  /* Heroes grow with their info; the minimum keeps the artwork's shape. */
+  .hero-card { position: relative; flex: 0 0 100%; scroll-snap-align: start; display: flex; flex-direction: column; justify-content: flex-end;
+    min-height: min(62dvh, 125vw);
     overflow: hidden; border-radius: var(--r-card); background: var(--ctp-surface0); text-align: left; }
   .hero-card img.bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
   .hero-card .shade { position: absolute; inset: 0;
     background: linear-gradient(to top, color-mix(in srgb, var(--ctp-crust) 92%, transparent) 10%, transparent 65%); }
-  .hero-card .info { position: absolute; left: 0; right: 0; bottom: 0; padding: 18px; display: flex; flex-direction: column; gap: 8px; }
+  .hero-card .info { position: relative; padding: 24px 20px 22px; display: flex; flex-direction: column; gap: 12px; }
   .hero-card .logo { max-width: 75%; max-height: 72px; object-fit: contain; object-position: left bottom; }
-  .hero-card .meta-line { font-size: 13px; color: var(--ctp-subtext1); }
-  .hero-card .rating { color: var(--ctp-yellow); font-weight: 700; }
+  .pills { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px; border-radius: 9999px; white-space: nowrap;
+    font-size: 12.5px; font-weight: 600; color: var(--ctp-text); background: color-mix(in srgb, var(--ctp-crust) 55%, transparent);
+    border: 1px solid color-mix(in srgb, var(--ctp-text) 16%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+  .pill.badge { letter-spacing: 0.04em; }
+  .pill .sep { width: 1px; height: 12px; background: currentColor; opacity: 0.45; }
+  .pill img { height: 14px; width: auto; max-width: 34px; display: block; }
+  .pill.rating b { font-weight: 700; }
   .hero-card .desc { font-size: 15px; color: var(--ctp-subtext1); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
-  .hero-card .btn { align-self: flex-start; }
+  .hero-card .btn { align-self: flex-start; margin-top: 4px; }
 
-  .rows { display: flex; flex-direction: column; gap: 22px; }
-  .row-title { margin: 0 0 10px; font-size: 20px; font-weight: 600; }
-  .tile { flex: none; scroll-snap-align: start; display: flex; flex-direction: column; gap: 6px; text-align: left; transition: transform 0.15s var(--ease); }
+  /* Home's three layouts, like the PC's Switch Layout:
+     Official: the carousel edge to edge. Scroll Posters: the carousel as a card, rows inside the margins.
+     Persistent Hero: no carousel; the picked title's artwork pinned at the top, the rows scrolling under it. */
+  .layout-switch button { height: 50px; flex-direction: column; gap: 2px; padding-inline: 4px; font-size: 12px; font-weight: 500; }
+  .layout-switch .line { width: 20px; height: 20px; }
+  .hero-dots { display: flex; justify-content: center; gap: 6px; margin-top: -10px; }
+  .hero-dots i { width: 6px; height: 6px; border-radius: 9999px; background: color-mix(in srgb, var(--ctp-text) 30%, transparent);
+    transition: width 0.25s var(--ease), background-color 0.25s; }
+  .hero-dots i.on { width: 20px; background: var(--ctp-text); }
+
+  #home[data-layout="official"] .hero-strip { margin-inline: -16px; padding-inline: 0; scroll-padding-inline: 0; gap: 0; }
+  #home[data-layout="official"] .hero-card { border-radius: 0; min-height: min(70dvh, 133vw); background: transparent; }
+  /* Official fades into the page; its info sits above the fade. */
+  #home[data-layout="official"] .hero-card :is(img.bg, .shade) { -webkit-mask-image: linear-gradient(to bottom, #000 78%, transparent);
+    mask-image: linear-gradient(to bottom, #000 78%, transparent); }
+  #home[data-layout="official"] .hero-card .info { padding: 0 20px 44px; }
+
+  #home[data-layout="scroll_posters"] .row-scroll { margin-inline: 0; padding-inline: 0; scroll-padding-inline: 0; }
+  #home[data-layout="scroll_posters"] .hero-card { min-height: min(50dvh, 75vw); }
+  #home[data-layout="scroll_posters"] .hero-card .desc { -webkit-line-clamp: 2; }
+
+  .persistent-hero { position: sticky; top: 0; z-index: 2; margin-inline: -16px; min-height: min(46dvh, 440px); display: flex; overflow: hidden;
+    background: var(--ctp-mantle); }
+  .persistent-hero .hero-card { flex: 1; min-height: 0; border-radius: 0; background: transparent; }
+  .persistent-hero .hero-card img.bg { -webkit-mask-image: linear-gradient(to bottom, #000 45%, transparent 98%);
+    mask-image: linear-gradient(to bottom, #000 45%, transparent 98%); }
+  .persistent-hero .hero-card .shade { background: linear-gradient(to top, var(--ctp-mantle) 4%, transparent 60%); }
+  .persistent-hero .hero-card .info { padding: 0 20px 20px; }
+  .persistent-hero .hero-card .logo { max-height: 64px; }
+  /* The pinned artwork replaces the blurred one, as on the PC. */
+  body:has(#home[data-layout="persistent_hero"]:not([hidden])) .home-backdrop { display: none; }
+  .tile[aria-current="true"] .art::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+    box-shadow: inset 0 0 0 3px var(--accent); }
+
+  .rows { display: flex; flex-direction: column; gap: 30px; }
+  .row-title { margin: 0 0 12px; font-size: 20px; font-weight: 600; }
+  .tile { flex: none; scroll-snap-align: start; display: flex; flex-direction: column; gap: 8px; text-align: left; transition: transform 0.15s var(--ease); }
   .tile:active { transform: scale(0.96); }
   .tile .art { position: relative; overflow: hidden; border-radius: calc(var(--r-ctl) + 2px); background: var(--ctp-surface0); }
   .tile .art img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -125,7 +167,7 @@
   .tile .name { font-size: 13px; color: var(--ctp-subtext1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .tile .time-left { position: absolute; top: 8px; right: 8px; padding: 2px 8px; border-radius: 6px; font-size: 12px; font-weight: 600;
     background: color-mix(in srgb, var(--ctp-crust) 80%, transparent); }
-  .tile .resume { position: absolute; left: 0; right: 0; bottom: 0; padding: 28px 12px 10px;
+  .tile .resume { position: absolute; left: 0; right: 0; bottom: 0; padding: 32px 14px 12px;
     background: linear-gradient(to top, color-mix(in srgb, var(--ctp-crust) 90%, transparent), transparent); }
   .tile .resume small { display: block; font-size: 12px; font-weight: 600; color: var(--accent); }
   .tile .resume b { display: block; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -137,7 +179,7 @@
   .search-box:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
   .search-box input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent; color: var(--ctp-text); font: inherit; font-size: 17px; }
   @media (min-width: 640px) and (orientation: landscape), (min-width: 760px) {
-    .hero-card { flex-basis: 100%; aspect-ratio: 21 / 9; max-height: 60dvh; }
+    .hero-card { flex-basis: 100%; min-height: min(60dvh, 43vw); }
     .tile.poster { width: 140px; }
     .tile.landscape { width: 280px; }
   }
@@ -363,6 +405,9 @@
   <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
   <symbol id="i-shuffle" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M16 8h.01M8 8h.01M8 16h.01M16 16h.01M12 12h.01"/></symbol>
   <symbol id="i-library" viewBox="0 0 24 24"><path d="m16 6 4 14"/><path d="M12 6v14"/><path d="M8 8v12"/><path d="M4 4v16"/></symbol>
+  <symbol id="i-layout-official" viewBox="0 0 24 24"><rect x="3" y="4" width="8" height="7" rx="1.5"/><rect x="13" y="4" width="8" height="7" rx="1.5"/><rect x="3" y="13" width="8" height="7" rx="1.5"/><rect x="13" y="13" width="8" height="7" rx="1.5"/></symbol>
+  <symbol id="i-layout-scroll_posters" viewBox="0 0 24 24"><rect x="6" y="5" width="12" height="14" rx="1.5"/><path d="M2 7v10M22 7v10"/></symbol>
+  <symbol id="i-layout-persistent_hero" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="9" rx="1.5"/><rect x="3" y="15" width="18" height="5" rx="1.5"/></symbol>
   <symbol id="i-remote" viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="3"/><circle cx="12" cy="8.5" r="2.5"/><path d="M10 14.5h.01M14 14.5h.01M10 18h.01M14 18h.01"/></symbol>
 </svg>
 
@@ -377,7 +422,14 @@
     <div class="skel sk-title"></div>
     <div class="sk-row"><div class="skel sk-poster"></div><div class="skel sk-poster"></div><div class="skel sk-poster"></div></div>
   </div>
+  <div class="seg seg-fill layout-switch" id="layout-switch" role="group" aria-label="Home layout" hidden>
+    <button data-layout="official" aria-pressed="false"><svg class="line"><use href="#i-layout-official"/></svg>Official</button>
+    <button data-layout="scroll_posters" aria-pressed="false"><svg class="line"><use href="#i-layout-scroll_posters"/></svg>Scroll Posters</button>
+    <button data-layout="persistent_hero" aria-pressed="false"><svg class="line"><use href="#i-layout-persistent_hero"/></svg>Persistent Hero</button>
+  </div>
+  <div class="persistent-hero" id="persistent-hero" hidden></div>
   <div class="hero-strip" id="hero-strip"></div>
+  <div class="hero-dots" id="hero-dots" aria-hidden="true"></div>
   <div id="home-rows" class="rows"></div>
   <div class="card t-sub text-sub" id="home-empty" hidden>Nothing on Home yet.</div>
 </main>
@@ -598,6 +650,7 @@
       if (msg.k === 'player') showPlayer(msg);
       if (msg.k === 'time') showTime(msg.position, msg.duration);
       if (msg.k === 'home') showHome(msg);
+      if (msg.k === 'hero') showPcHero(msg.hero);
       if (msg.k === 'search') showSearch(msg);
       if (msg.k === 'route') { pcRoute = msg.route; updateView(); }
       if (msg.k === 'details') showDetails(msg);
@@ -912,8 +965,31 @@
       target: { kind: 'poster', ...location, id: item.id, type: item.type } };
   }
 
-  function heroCard(hero, index) {
-    const location = { from: 'hero', item: index };
+  // The PC hero's info rows as pills: type, genre, runtime and release; age rating | status; language; ratings.
+  function heroPills(hero) {
+    const facts = el('div', 'pills');
+    (hero.facts || []).forEach((fact) => facts.append(el('span', 'pill', fact)));
+    if (hero.badges?.length) {
+      const badge = el('span', 'pill badge');
+      hero.badges.forEach((text, i) => badge.append(...(i ? [el('i', 'sep')] : []), text));
+      facts.append(badge);
+    }
+    if (hero.language) facts.append(el('span', 'pill', hero.language));
+    const ratings = el('div', 'pills');
+    (hero.ratings || []).forEach((rating) => {
+      const pill = el('span', 'pill rating');
+      const logo = img(rating.logo);
+      logo.alt = rating.name;
+      logo.onerror = () => logo.replaceWith(el('span', '', rating.name));
+      const value = el('b', '', rating.value);
+      value.style.color = rating.color;
+      pill.append(logo, value);
+      ratings.append(pill);
+    });
+    return [facts, ratings].filter((row) => row.childElementCount);
+  }
+
+  function heroCard(hero, location) {
     const open = () => { markBusy(card); awaitingDetails = true; send({ cmd: 'open', ...location }); };
     const card = el('div', 'hero-card');
     card.append(img(hero.image, 'bg'), el('div', 'shade'));
@@ -925,11 +1001,7 @@
     } else {
       info.append(el('div', 't-title2', hero.name));
     }
-    const meta = el('div', 'meta-line');
-    if (hero.year) meta.append(`${hero.year}  `);
-    if (Number(hero.rating) > 0) meta.append(el('span', 'rating', `IMDb ${hero.rating}`), '  ');
-    if (hero.genres) meta.append(hero.genres);
-    if (meta.childNodes.length) info.append(meta);
+    info.append(...heroPills(hero));
     if (hero.description) info.append(el('div', 'desc', hero.description));
     const details = el('button', 'btn btn-sm', 'View Details');
     info.append(details);
@@ -948,7 +1020,8 @@
       if (!folder) awaitingDetails = true;
       send({ cmd: folder ? 'folder' : 'open', ...location });
     };
-    bindCardMenu(tile, open, folder ? null : posterMenu(item, location));
+    const run = item.heroKey ? pickable(tile, item.heroKey, { cmd: 'heroPick', ...location }, open) : open;
+    bindCardMenu(tile, run, folder ? null : posterMenu(item, location));
     return tile;
   }
 
@@ -969,11 +1042,13 @@
     tile.append(art);
     if (item.subtitle) tile.append(el('span', 'name', item.subtitle));
     const resumePlayback = () => { markBusy(art); send({ cmd: 'resume', item: index }); };
-    bindCardMenu(tile, resumePlayback, {
+    const menu = {
       title: item.title,
       description: [item.episode, item.subtitle].filter(Boolean).join(' · '),
       target: { kind: 'continue', item: index, key: item.key },
-    });
+    };
+    const run = item.heroKey ? pickable(tile, item.heroKey, { cmd: 'heroPick', from: 'continue', item: index }, resumePlayback) : resumePlayback;
+    bindCardMenu(tile, run, menu);
     return tile;
   }
 
@@ -1008,6 +1083,7 @@
   let homeBackdropRequest = null;
 
   function updateHomeBackdrop() {
+    $('hero-dots').querySelectorAll('i').forEach((dot, i) => dot.classList.toggle('on', i === homeHeroIndex));
     const source = homeHeroes[homeHeroIndex]?.image || null;
     if ((homeBackdropRequest?.getAttribute('src') ?? null) === source) return;
     homeBackdropRequest = source ? new Image() : null;
@@ -1126,6 +1202,61 @@
     scheduleHomeHero();
   }, { passive: true });
 
+  // ─── Layouts: the PC's Switch Layout, and the Persistent Hero mirrored from the PC ───
+  let homeLayout = 'official';
+  let pcHero = null; // the title the PC's Persistent Hero shows, details loaded
+  let pickedKey = null; // the card it shows, or the one just picked on the phone while the PC loads it
+  let pcHeroContent = '';
+
+  document.querySelectorAll('#layout-switch [data-layout]').forEach((button) => button.addEventListener('click', () => {
+    if (button.dataset.layout !== homeLayout) send({ cmd: 'layout', value: button.dataset.layout });
+  }));
+
+  function showLayout(layout) {
+    homeLayout = ['official', 'scroll_posters', 'persistent_hero'].includes(layout) ? layout : 'official';
+    $('home').dataset.layout = homeLayout;
+    $('layout-switch').hidden = !layout;
+    document.querySelectorAll('#layout-switch [data-layout]').forEach((button) =>
+      button.setAttribute('aria-pressed', button.dataset.layout === homeLayout));
+  }
+
+  // The first tap shows a card in the PC's hero, like hovering it; a tap on the card it shows opens it.
+  function pickable(tile, key, pick, run) {
+    tile.dataset.pickKey = key;
+    tile.setAttribute('aria-current', key === pickedKey);
+    return () => {
+      if (key === pcHero?.key) {
+        run();
+        return;
+      }
+      send(pick);
+      markPicked(key);
+    };
+  }
+
+  function markPicked(key) {
+    pickedKey = key;
+    $('home-rows').querySelectorAll('[data-pick-key]').forEach((tile) =>
+      tile.setAttribute('aria-current', tile.dataset.pickKey === pickedKey));
+  }
+
+  function showPcHero(hero) {
+    pcHero = hero;
+    markPicked(hero?.key ?? null);
+    renderPcHero();
+  }
+
+  function renderPcHero() {
+    const pane = $('persistent-hero');
+    const show = homeLayout === 'persistent_hero' && pcHero !== null;
+    pane.hidden = !show;
+    const content = show ? JSON.stringify(pcHero) : '';
+    if (content === pcHeroContent) return;
+    pcHeroContent = content;
+    pane.replaceChildren(...(show ? [heroCard(pcHero, { from: 'persistent' })] : []));
+    if (show && !homeHeroMotion.matches) pane.firstElementChild.animate([{ opacity: 0.3 }, { opacity: 1 }], { duration: 260, easing: 'ease-out' });
+  }
+
   function showHomeHero(heroes) {
     const heroContent = JSON.stringify(heroes);
     if (heroContent !== homeHeroContent) {
@@ -1135,8 +1266,9 @@
       homeHeroContent = heroContent;
       homeHeroes = heroes;
       homeHeroIndex = Math.max(0, heroes.findIndex((hero) => hero.key === previousKey));
-      homeHeroStrip.replaceChildren(...heroes.map(heroCard));
+      homeHeroStrip.replaceChildren(...heroes.map((hero, index) => heroCard(hero, { from: 'hero', item: index })));
       homeHeroStrip.hidden = !heroes.length;
+      $('hero-dots').replaceChildren(...(heroes.length > 1 ? heroes.map(() => el('i')) : []));
       moveHomeHero(homeHeroIndex);
       updateHomeBackdrop();
       scheduleHomeHero();
@@ -1144,7 +1276,8 @@
   }
 
   function showHome(msg) {
-    const heroes = msg.heroEnabled === false ? [] : msg.hero;
+    showLayout(msg.layout);
+    const heroes = msg.heroEnabled === false || homeLayout === 'persistent_hero' ? [] : msg.hero;
     const sections = [];
     if (msg.continue.length) sections.push(rowSection('Continue Watching', msg.continue.map(resumeTile)));
     // Catalog rows open a title; collection rows (Discover, Streaming…) open a folder.
@@ -1159,6 +1292,7 @@
 
     try {
       showHomeHero(heroes);
+      renderPcHero();
     } catch (error) {
       console.error('Failed to render the Home hero', error);
       clearTimeout(homeHeroTimer);

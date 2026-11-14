@@ -10,6 +10,7 @@ import com.nuvio.app.core.ui.RemoteNavigationDispatcher
 import com.nuvio.app.features.anime.AnimeFillerSettingsRepository
 import com.nuvio.app.features.player.PlayerSettingsRepository
 import io.ktor.http.ContentType
+import nuvio.composeapp.generated.resources.Res
 import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.EmbeddedServer
@@ -50,6 +51,7 @@ internal object DesktopRemoteServer : RemoteServerPlatform {
     private const val ENABLED_KEY = "enabled"
     private const val PORT_KEY = "port"
     private val ICON_SIZES = setOf("180", "192", "512")
+    private val RATING_LOGO = Regex("""rating_[a-z_]+\.svg""")
     private val store = DesktopStorage.store("nuvio_remote_settings")
     private var server: EmbeddedServer<*, *>? = null
 
@@ -85,6 +87,12 @@ internal object DesktopRemoteServer : RemoteServerPlatform {
                 get("/manifest.webmanifest") {
                     call.respondText(resource("manifest.webmanifest"), ContentType.parse("application/manifest+json"))
                 }
+                // The rating logos the PC's hero shows, from the app's own drawables.
+                get("/rating/{file}") {
+                    val file = call.parameters["file"]?.takeIf { RATING_LOGO.matches(it) }
+                    val bytes = file?.let { runCatching { Res.readBytes("drawable/$it") }.getOrNull() }
+                    if (bytes == null) call.respond(HttpStatusCode.NotFound) else call.respondBytes(bytes, ContentType.Image.SVG)
+                }
                 get("/icon-{size}.png") {
                     val bytes = call.parameters["size"]?.takeIf { it in ICON_SIZES }
                         ?.let { javaClass.getResource("/remote/icon-$it.png")?.readBytes() }
@@ -103,6 +111,7 @@ internal object DesktopRemoteServer : RemoteServerPlatform {
                     // Browsing: Home's rows and the search results.
                     val home = launch { RemoteHome.homeMessages.collect { send(Frame.Text(it)) } }
                     val search = launch { RemoteHome.searchMessages.collect { send(Frame.Text(it)) } }
+                    val hero = launch { RemoteHome.heroMessages.collect { send(Frame.Text(it)) } }
                     // Following the PC into a title, its sources and the player.
                     val pages = launch {
                         launch { RemoteDetails.routeMessages.collect { send(Frame.Text(it)) } }
@@ -127,6 +136,7 @@ internal object DesktopRemoteServer : RemoteServerPlatform {
                         progress.cancel()
                         home.cancel()
                         search.cancel()
+                        hero.cancel()
                         pages.cancel()
                     }
                 }
@@ -185,7 +195,7 @@ internal object DesktopRemoteServer : RemoteServerPlatform {
         when (cmd) {
             "dpadBack" -> RemoteAppBridge.send(RemoteAppBridge.Command.Back(fromDpad = true))
             "okLong" -> SwingUtilities.invokeLater { RemoteNavigationDispatcher.openContextMenu() }
-            "tab", "open", "folder", "resume", "search" -> RemoteHome.handle(cmd, json)
+            "tab", "open", "folder", "resume", "search", "layout", "heroPick" -> RemoteHome.handle(cmd, json)
             "fillerDetection", "hideFillers" -> RemoteDetails.handle(cmd, json)
             "back", "play", "episode", "saved", "watched", "stream", "reloadStreams", "fromStart" -> RemoteDetails.handle(cmd, json)
             "player" -> {
