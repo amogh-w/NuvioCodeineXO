@@ -142,9 +142,10 @@
 
   #home[data-layout="official"] .hero-strip { margin-inline: -16px; padding-inline: 0; scroll-padding-inline: 0; gap: 0; }
   #home[data-layout="official"] .hero-card { border-radius: 0; min-height: min(70dvh, 133vw); background: transparent; }
-  /* Official fades into the page; its info sits above the fade. */
-  #home[data-layout="official"] .hero-card :is(img.bg, .shade) { -webkit-mask-image: linear-gradient(to bottom, #000 78%, transparent);
-    mask-image: linear-gradient(to bottom, #000 78%, transparent); }
+  /* Official fades into the page at its top and bottom edges; its info sits above the bottom fade. */
+  #home[data-layout="official"] .hero-card :is(img.bg, .shade) {
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 14%, #000 78%, transparent);
+    mask-image: linear-gradient(to bottom, transparent, #000 14%, #000 78%, transparent); }
   #home[data-layout="official"] .hero-card .info { padding: 0 20px 44px; }
 
   #home[data-layout="scroll_posters"] .row-scroll { margin-inline: 0; padding-inline: 0; scroll-padding-inline: 0; }
@@ -154,8 +155,8 @@
   .persistent-hero { position: sticky; top: 0; z-index: 2; margin-inline: -16px; min-height: min(46dvh, 440px); display: flex; overflow: hidden;
     background: var(--ctp-mantle); }
   .persistent-hero .hero-card { flex: 1; min-height: 0; border-radius: 0; background: transparent; }
-  .persistent-hero .hero-card img.bg { -webkit-mask-image: linear-gradient(to bottom, #000 45%, transparent 98%);
-    mask-image: linear-gradient(to bottom, #000 45%, transparent 98%); }
+  .persistent-hero .hero-card img.bg { -webkit-mask-image: linear-gradient(to bottom, transparent, #000 14%, #000 45%, transparent 98%);
+    mask-image: linear-gradient(to bottom, transparent, #000 14%, #000 45%, transparent 98%); }
   .persistent-hero .hero-card .shade { background: linear-gradient(to top, var(--ctp-mantle) 4%, transparent 60%); }
   .persistent-hero .hero-card .info { padding: 0 20px 20px; }
   .persistent-hero .hero-card .logo { max-height: 64px; }
