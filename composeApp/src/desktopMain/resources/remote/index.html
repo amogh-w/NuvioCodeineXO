@@ -201,6 +201,21 @@
   #search-rows:empty { display: none; }
   #search-start section { display: flex; flex-direction: column; gap: 12px; }
   #search-start .row-title { margin: 0; }
+  /* Shuffle, like the PC: its filters as one form, actions, progress, and the picked title as a hero. */
+  #shuffle { gap: 16px; }
+  #shuffle p { margin: 0; }
+  .shuffle-toggles .row { padding-inline: 0; }
+  .shuffle-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 12px; }
+  .shuffle-form > * { grid-column: 1 / -1; }
+  .shuffle-form > .field.half { grid-column: auto; }
+  .field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .field-label { font-size: 13px; font-weight: 600; color: var(--ctp-subtext0); }
+  .field .picker { width: 100%; max-width: none; }
+  .shuffle-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+  .shuffle-feedback { display: flex; align-items: center; gap: 10px; }
+  .shuffle-feedback:empty { display: none; }
+  .shuffle-result-actions { display: flex; gap: 10px; }
+  .shuffle-result-actions .btn { flex: 1; }
   .catalog-status { display: flex; justify-content: center; align-items: center; gap: 10px; min-height: 64px; }
   @media (min-width: 480px) { .grid-page .catalog-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
   .row-title { margin: 0 0 12px; font-size: 20px; font-weight: 600; }
@@ -504,6 +519,21 @@
   <div class="catalog-status text-sub" id="folder-status"></div>
 </main>
 
+<!-- Shuffle, following the PC: its filters, Shuffle, and the picked title. -->
+<main id="shuffle" class="browse" hidden>
+  <div id="shuffle-result" hidden></div>
+  <div class="catalog-head"><h2 class="t-title2" id="shuffle-title"></h2></div>
+  <p class="text-sub" id="shuffle-subtitle"></p>
+  <div class="card shuffle-form" id="shuffle-form"></div>
+  <div class="shuffle-actions">
+    <button class="btn btn-filled" id="shuffle-pick"></button>
+    <button class="btn btn-gray" id="shuffle-reset"></button>
+    <button class="btn btn-gray" id="shuffle-cancel" hidden></button>
+  </div>
+  <div class="shuffle-feedback text-sub" id="shuffle-feedback"></div>
+  <p class="note" id="shuffle-hint"></p>
+</main>
+
 <main id="search" class="browse" hidden>
   <label class="search-box">
     <svg class="line"><use href="#i-search"/></svg>
@@ -747,6 +777,7 @@
       if (msg.k === 'catalog') showCatalog(msg);
       if (msg.k === 'folder') showFolder(msg);
       if (msg.k === 'discover') showDiscover(msg);
+      if (msg.k === 'shuffle') showShuffle(msg);
       if (msg.k === 'route') { pcRoute = msg.route; updateView(); }
       if (msg.k === 'details') showDetails(msg);
       if (msg.k === 'streams') showStreams(msg);
@@ -921,7 +952,8 @@
     const homeWasVisible = !$('home').hidden;
     if (homeWasVisible && !homeVisible) homeScroll = scrollY;
     // Pages the phone can't show (Shuffle, Library, Settings, a folder…) are driven with the D-pad.
-    const pcTab = onTabs && browseTab !== 'home' && browseTab !== 'search';
+    const shuffleVisible = onTabs && browseTab === 'shuffle' && Boolean(shuffle?.active);
+    const pcTab = onTabs && browseTab !== 'home' && browseTab !== 'search' && !shuffleVisible;
     const pcPage = browsing && pcRoute === 'other';
     setHidden('player', !playing);
     setHidden('next-episode-pill', !(state.active && state.nextEpisodePlayable));
@@ -937,6 +969,9 @@
     }
     if (detailsVisible && detailsWasHidden && !awaitingDetails && details?.name) renderEpisodes();
     setHidden('streams', !(browsing && pcRoute === 'streams'));
+    const shuffleOpening = $('shuffle').hidden && shuffleVisible;
+    setHidden('shuffle', !shuffleVisible);
+    if (shuffleOpening) { scrollTo(0, 0); renderShuffle(); }
     // A page shown from the top when it opens: View All and folders.
     [['catalog', ['catalog', 'collection', 'continue'], renderCatalog], ['folder', ['folder'], renderFolder]].forEach(([page, routes, render]) => {
       const opening = $(page).hidden && browsing && routes.includes(pcRoute);
@@ -1797,9 +1832,9 @@
       row.append(again, forget);
       return row;
     }));
-    picker($('pick-type'), msg.types, msg.type, 'discoverType');
-    picker($('pick-catalog'), msg.catalogs, msg.catalog, 'discoverCatalog');
-    picker($('pick-genre'), msg.genres, msg.genre, 'discoverGenre');
+    picker($('pick-type'), msg.types, msg.type, (value) => send({ cmd: 'discoverType', value }));
+    picker($('pick-catalog'), msg.catalogs, msg.catalog, (value) => send({ cmd: 'discoverCatalog', value }));
+    picker($('pick-genre'), msg.genres, msg.genre, (value) => send({ cmd: 'discoverGenre', value }));
     $('discover-source').textContent = msg.source || '';
     fillGrid($('discover-grid'), msg.items, msg.shape, (i) => ({ from: 'discover', item: i }));
     pageStatus($('discover-status'), { ...msg, count: msg.items.length });
@@ -1807,7 +1842,7 @@
   }
 
   // A native picker (the phone's own wheel) for one of Discover's dropdowns; choosing sends it to the PC.
-  function picker(select, options, selected, cmd) {
+  function picker(select, options, selected, onChange) {
     const signature = JSON.stringify(options);
     if (select.dataset.options !== signature) {
       select.dataset.options = signature;
@@ -1816,11 +1851,104 @@
         item.value = option.key;
         return item;
       }));
-      select.onchange = () => send({ cmd, value: select.value });
+      select.onchange = () => onChange(select.value);
     }
     select.value = selected ?? '';
     select.disabled = options.length < 2;
   }
+
+  // ─── Shuffle: the PC's own Shuffle, its filters as a form; every change runs on the PC ───
+  let shuffle = null;
+
+  function showShuffle(msg) {
+    const wasActive = Boolean(shuffle?.active);
+    shuffle = msg;
+    // Follow the PC into and out of Shuffle.
+    if (msg.active !== wasActive) {
+      if (msg.active) browseTab = 'shuffle';
+      else if (browseTab === 'shuffle') browseTab = 'home';
+      updateView();
+    }
+    renderShuffle();
+  }
+
+  const setFilter = (field, value) => send({ cmd: 'shuffleFilter', field, value });
+
+  // A filter: a dropdown (the phone's own wheel) or, for the series status, chips like the PC's.
+  function shuffleField(field) {
+    let box = $(`shuffle-${field.id}`);
+    if (!box) {
+      box = el(field.chips ? 'div' : 'label', 'field');
+      box.id = `shuffle-${field.id}`;
+      box.append(el('span', 'field-label'), field.chips ? el('div', 'seg seg-fill') : el('select', 'picker'));
+      // Category and Type, Genre and Rating sit side by side; the rest take the full width.
+      if (['style', 'format', 'genre', 'rating'].includes(field.id)) box.classList.add('half');
+    }
+    box.firstChild.textContent = field.label;
+    const control = box.lastChild;
+    if (field.chips) {
+      control.replaceChildren(...field.options.map((option) => {
+        const chip = el('button', '', option.label);
+        chip.setAttribute('aria-pressed', option.key === field.value);
+        chip.disabled = field.disabled;
+        chip.addEventListener('click', () => setFilter(field.id, option.key));
+        return chip;
+      }));
+    } else {
+      picker(control, field.options, field.value, (value) => setFilter(field.id, value));
+    }
+    return box;
+  }
+
+  function renderShuffle() {
+    if (!shuffle?.active || $('shuffle').hidden) return;
+    const { labels } = shuffle;
+    $('shuffle-title').textContent = labels.title;
+    $('shuffle-subtitle').textContent = labels.subtitle;
+    // Built once and updated in place, so a picker wheel open on the phone stays open while the PC updates.
+    const form = $('shuffle-form');
+    if (!form.childElementCount) {
+      form.append(el('div', 'field-label', labels.types), ...shuffle.fields.map(shuffleField),
+        el('p', 'note'), el('div', 'shuffle-toggles'), el('p', 'note'));
+    }
+    shuffle.fields.forEach(shuffleField);
+    const [noSources, toggles, hint] = [...form.children].slice(-3);
+    noSources.textContent = shuffle.noSources || '';
+    noSources.hidden = !shuffle.noSources;
+    toggles.replaceChildren(...shuffle.toggles.map((t) => toggle(t.label, null, t.value, (on) => setFilter(t.id, String(on)))));
+    hint.textContent = labels.excludeHint;
+    $('shuffle-pick').textContent = labels.pick;
+    $('shuffle-pick').disabled = !shuffle.canPick;
+    $('shuffle-reset').textContent = labels.reset;
+    $('shuffle-cancel').textContent = labels.cancel;
+    $('shuffle-cancel').hidden = !shuffle.picking;
+    $('shuffle-feedback').replaceChildren(...(shuffle.busy ? [el('span', 'spin-ring sm')] : []),
+      ...(shuffle.feedback.length ? [el('span', '', shuffle.feedback.join(' · '))] : []));
+    $('shuffle-hint').textContent = labels.samplingHint;
+    // The picked title, like the PC's popup: its hero, then Shuffle Again and Close.
+    const result = $('shuffle-result');
+    const content = shuffle.result ? JSON.stringify(shuffle.result) : '';
+    if (result.dataset.content !== content) {
+      result.dataset.content = content;
+      result.hidden = !shuffle.result;
+      if (shuffle.result) {
+        const actions = el('div', 'shuffle-result-actions');
+        const again = el('button', 'btn btn-gray', labels.again);
+        again.addEventListener('click', () => send({ cmd: 'shufflePick' }));
+        const close = el('button', 'btn btn-gray', labels.close);
+        close.addEventListener('click', () => send({ cmd: 'shuffleClose' }));
+        actions.append(again, close);
+        result.replaceChildren(heroCard(shuffle.result, { from: 'shuffle' }), actions);
+        scrollTo({ top: 0, behavior: 'smooth' });
+      } else {
+        result.replaceChildren();
+      }
+    }
+    result.querySelectorAll('.shuffle-result-actions .btn').forEach((b) => { b.disabled = shuffle.picking; });
+  }
+  $('shuffle-pick').addEventListener('click', () => send({ cmd: 'shufflePick' }));
+  $('shuffle-reset').addEventListener('click', () => send({ cmd: 'shuffleReset' }));
+  $('shuffle-cancel').addEventListener('click', () => send({ cmd: 'shuffleCancel' }));
 
   function showSearch(msg) {
     searchResults = msg;

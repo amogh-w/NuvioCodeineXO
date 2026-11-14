@@ -115,6 +115,7 @@ internal object DesktopRemoteServer : RemoteServerPlatform {
                     val catalog = launch { RemoteHome.catalogMessages.collect { send(Frame.Text(it)) } }
                     val folder = launch { RemoteFolderPage.messages.collect { send(Frame.Text(it)) } }
                     val discover = launch { RemoteSearch.messages.collect { send(Frame.Text(it)) } }
+                    val shuffle = launch { RemoteShufflePage.messages.collect { send(Frame.Text(it)) } }
                     // Following the PC into a title, its sources and the player.
                     val pages = launch {
                         launch { RemoteDetails.routeMessages.collect { send(Frame.Text(it)) } }
@@ -143,6 +144,7 @@ internal object DesktopRemoteServer : RemoteServerPlatform {
                         catalog.cancel()
                         folder.cancel()
                         discover.cancel()
+                        shuffle.cancel()
                         pages.cancel()
                     }
                 }
@@ -204,6 +206,7 @@ internal object DesktopRemoteServer : RemoteServerPlatform {
             "tab", "open", "folder", "resume", "search", "layout", "heroPick", "viewAll", "catalogMore" -> RemoteHome.handle(cmd, json)
             "folderTab", "folderMore" -> RemoteFolderPage.handle(cmd, json)
             "searchRemove", "discoverType", "discoverCatalog", "discoverGenre", "discoverMore" -> RemoteSearch.handle(cmd, json)
+            "shuffleFilter", "shufflePick", "shuffleReset", "shuffleCancel", "shuffleClose" -> RemoteShufflePage.handle(cmd, json)
             "fillerDetection", "hideFillers" -> RemoteDetails.handle(cmd, json)
             "back", "play", "episode", "saved", "watched", "stream", "reloadStreams", "fromStart" -> RemoteDetails.handle(cmd, json)
             "player" -> {

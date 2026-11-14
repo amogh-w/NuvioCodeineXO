@@ -175,7 +175,10 @@ internal object RemoteHome {
     }
 
     fun posterAt(json: JsonObject): MetaPreview? {
-        if (json["from"]?.jsonPrimitive?.contentOrNull == "persistent") return RemoteAppBridge.persistentHero.value
+        when (json["from"]?.jsonPrimitive?.contentOrNull) {
+            "persistent" -> return RemoteAppBridge.persistentHero.value
+            "shuffle" -> return RemoteShufflePage.picked()
+        }
         val item = json["item"]?.jsonPrimitive?.intOrNull ?: return null
         val row = json["row"]?.jsonPrimitive?.contentOrNull
         return when (json["from"]?.jsonPrimitive?.contentOrNull) {
@@ -188,37 +191,6 @@ internal object RemoteHome {
             "folder" -> RemoteFolderPage.posterAt(row, item)
             "discover" -> RemoteSearch.posterAt(item)
             else -> null
-        }
-    }
-
-    /** The hero's info rows, with the same rating settings as the PC's hero. */
-    private suspend fun heroInfo(meta: MetaPreview): HeroInfo {
-        val mdbList = MdbListSettingsRepository.uiState.value
-        return meta.heroInfo(
-            showImdbRating = MetaScreenSettingsRepository.uiState.value.showOverallRatings,
-            showMdbListRatings = mdbList.isActive && mdbList.showOnHero,
-        )
-    }
-
-    private fun JsonObjectBuilder.hero(meta: MetaPreview, info: HeroInfo) {
-        posterIdentity(meta)
-        put("key", meta.stableKey())
-        put("image", meta.banner ?: meta.poster ?: meta.landscapePoster)
-        put("logo", meta.logo)
-        put("description", meta.description)
-        // The PC hero's info rows: facts, the age rating and status badge, language, and ratings with their logos.
-        putJsonArray("facts") { info.facts.forEach { add(it) } }
-        putJsonArray("badges") { info.badges.forEach { add(it) } }
-        put("language", info.language)
-        putJsonArray("ratings") {
-            info.ratings.forEach {
-                addJsonObject {
-                    put("name", it.name)
-                    put("logo", "/rating/${it.logoFile}")
-                    put("value", it.value)
-                    put("color", "#%06X".format(it.color.toArgb() and 0xFFFFFF))
-                }
-            }
         }
     }
 
@@ -290,4 +262,35 @@ internal fun JsonArrayBuilder.poster(meta: MetaPreview, landscape: Boolean, hero
     posterIdentity(meta)
     if (heroKey) put("heroKey", meta.stableKey())
     put("image", if (landscape) meta.landscapePoster ?: meta.banner ?: meta.poster else meta.poster ?: meta.landscapePoster)
+}
+
+/** The hero's info rows, with the same rating settings as the PC's hero. */
+internal suspend fun heroInfo(meta: MetaPreview): HeroInfo {
+    val mdbList = MdbListSettingsRepository.uiState.value
+    return meta.heroInfo(
+        showImdbRating = MetaScreenSettingsRepository.uiState.value.showOverallRatings,
+        showMdbListRatings = mdbList.isActive && mdbList.showOnHero,
+    )
+}
+
+internal fun JsonObjectBuilder.hero(meta: MetaPreview, info: HeroInfo) {
+    posterIdentity(meta)
+    put("key", meta.stableKey())
+    put("image", meta.banner ?: meta.poster ?: meta.landscapePoster)
+    put("logo", meta.logo)
+    put("description", meta.description)
+    // The PC hero's info rows: facts, the age rating and status badge, language, and ratings with their logos.
+    putJsonArray("facts") { info.facts.forEach { add(it) } }
+    putJsonArray("badges") { info.badges.forEach { add(it) } }
+    put("language", info.language)
+    putJsonArray("ratings") {
+        info.ratings.forEach {
+            addJsonObject {
+                put("name", it.name)
+                put("logo", "/rating/${it.logoFile}")
+                put("value", it.value)
+                put("color", "#%06X".format(it.color.toArgb() and 0xFFFFFF))
+            }
+        }
+    }
 }
