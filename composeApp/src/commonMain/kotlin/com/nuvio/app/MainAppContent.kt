@@ -1632,7 +1632,8 @@ internal fun MainAppContent(
                                 val returningHome = destination is TabsRoute && selectedTab == AppScreenTab.Home
                                 val phoneBrowsingPage = when (destination) {
                                     is TabsRoute -> returningHome || selectedTab == AppScreenTab.Search
-                                    is DetailRoute, is StreamRoute -> true
+                                    is DetailRoute, is StreamRoute, is CatalogRoute, is CollectionFoldersRoute,
+                                    is ContinueWatchingRoute -> true
                                     else -> false
                                 }
                                 val clearHomeFocus = returningHome &&
@@ -1646,12 +1647,24 @@ internal fun MainAppContent(
                 }
             }
             LaunchedEffect(currentRoute) {
+                // The "View All" page open here, which the phone remote follows.
+                com.nuvio.app.features.remote.RemoteCatalog.publishPage(
+                    when (val route = currentRoute) {
+                        is CatalogRoute -> com.nuvio.app.features.remote.RemoteCatalog.Page(route.title)
+                        is CollectionFoldersRoute -> com.nuvio.app.features.remote.RemoteCatalog.Page(route.title, route.collectionId)
+                        is ContinueWatchingRoute -> com.nuvio.app.features.remote.RemoteCatalog.Page(route.title)
+                        else -> null
+                    },
+                )
                 com.nuvio.app.features.remote.RemoteAppBridge.publishRoute(
                     when (currentRoute) {
                         null, is TabsRoute, is RandomPickerRoute -> "tabs"
                         is DetailRoute -> "details"
                         is StreamRoute -> "streams"
                         is PlayerRoute -> "player"
+                        is CatalogRoute -> "catalog"
+                        is CollectionFoldersRoute -> "collection"
+                        is ContinueWatchingRoute -> "continue"
                         else -> "other"
                     },
                 )
