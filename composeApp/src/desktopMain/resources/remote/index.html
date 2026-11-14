@@ -85,6 +85,16 @@
     gap: 2px; border-radius: 9999px; font-size: 11px; font-weight: 500; color: var(--ctp-subtext1); transition: background-color 0.2s, color 0.2s; }
   .tab :is(.line, .ic) { width: 22px; height: 22px; }
   .tab:active:not(:disabled) { background-color: var(--glass-active); }
+  /* Back answers at once: it lights up and its arrow nudges, the page starts to leave, and the arrow pulses
+     until the PC has gone back. */
+  [data-back] svg { transition: transform 0.18s var(--ease); }
+  [data-back]:active svg { transform: translateX(-4px); }
+  [data-back].pending { background-color: var(--glass-accent); box-shadow: var(--glass-selected-rim); color: var(--ctp-text); }
+  [data-back].pending svg { animation: back-pulse 0.7s var(--ease) infinite; }
+  @keyframes back-pulse { 50% { transform: translateX(-4px); } }
+  main.leaving { opacity: 0.5; transform: translateX(16px); pointer-events: none;
+    transition: opacity 0.18s var(--ease), transform 0.18s var(--ease); }
+  @media (prefers-reduced-motion: reduce) { [data-back].pending svg { animation: none; } main.leaving { transform: none; } }
   .playback-pill { position: absolute; bottom: 0; }
   #next-episode-pill { left: 0; }
   #skip-segment-pill { left: 50%; transform: translateX(-50%); max-width: calc(100% - 2 * (var(--bottom-tab-width) + 20px)); }
@@ -819,7 +829,7 @@
     wasPlaying = playing;
     // The PC moved on: whatever was spinning has arrived.
     const view = `${playing}|${pcRoute}`;
-    if (view !== lastView) { clearBusy(); $('card-menu').close(); lastView = view; }
+    if (view !== lastView) { clearBusy(); clearBackPending(); $('card-menu').close(); lastView = view; }
     const browsing = !playing && !dpadMode;
     const onTabs = browsing && pcRoute === 'tabs';
     const homeVisible = onTabs && browseTab === 'home';
@@ -1310,13 +1320,30 @@
     }
   }
 
+  let backTimer;
+  // Until the PC has gone back (the view changes) or 1.5 s pass.
+  function backPending(button, page) {
+    clearBackPending();
+    button.classList.add('pending');
+    page?.classList.add('leaving');
+    navigator.vibrate?.(10);
+    backTimer = setTimeout(clearBackPending, 1500);
+  }
+  function clearBackPending() {
+    clearTimeout(backTimer);
+    document.querySelectorAll('[data-back].pending').forEach((n) => n.classList.remove('pending'));
+    document.querySelectorAll('main.leaving').forEach((n) => n.classList.remove('leaving'));
+  }
+
   document.querySelectorAll('[data-back]').forEach((button) => button.addEventListener('click', () => {
     if (!$('player').hidden) {
+      backPending(button, $('player'));
       player('back');
       return;
     }
     stopDpadPress();
     const phonePage = $('remote').hidden && (pcRoute === 'details' || pcRoute === 'streams');
+    backPending(button, phonePage ? $(pcRoute) : null);
     send({ cmd: phonePage ? 'back' : 'dpadBack' });
   }));
 
